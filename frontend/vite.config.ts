@@ -26,6 +26,12 @@ export default defineConfig(({ mode }) => {
   const stripProxyPrefix: Plugin = {
     name: "map-stripped-proxy-prefix",
     configureServer(server) {
+      if (env.VITE_LOG_REQUESTS)
+        server.middlewares.use((req, res, next) => {
+          const url = req.url;
+          res.on("finish", () => console.log(`[req] ${res.statusCode} ${req.method} ${url} host=${req.headers.host} xfwd=${req.headers["x-forwarded-for"] ?? "-"}`));
+          next();
+        });
       if (serverPrefix === base) return;
       server.middlewares.use((req, _res, next) => (mapPrefix(req), next()));
       // The HMR websocket upgrade arrives with the stripped path too; map it before Vite checks it.
