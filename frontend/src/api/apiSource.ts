@@ -1,0 +1,64 @@
+import type { Annotation, AnnotationCreate, ConditionKey, Dataset, Health, Page, Sample } from "../types/api";
+import type { DataSource } from "./source";
+
+export class ApiSource implements DataSource {
+  readonly label = "api" as const;
+  private readonly base: string;
+  constructor(base: string) {
+    this.base = base;
+  }
+
+  private async req<T>(path: string, init?: RequestInit): Promise<T> {
+    let r: Response;
+    try {
+      r = await fetch(`${this.base}/api${path}`, { headers: { "content-type": "application/json" }, ...init });
+    } catch (e) {
+      throw new Error(`Cannot reach ${this.base || "the backend"}: ${(e as Error).message}`);
+    }
+    if (!r.ok) {
+      let msg = `HTTP ${r.status}`;
+      try {
+        const body = (await r.json()) as { detail?: unknown };
+        if (body.detail) msg = typeof body.detail === "string" ? body.detail : JSON.stringify(body.detail);
+      } catch {
+        /* no JSON body */
+      }
+      throw new Error(msg);
+    }
+    return r.status === 204 ? (undefined as T) : ((await r.json()) as T);
+  }
+
+  health(): Promise<Health> {
+    return this.req<Health>("/health");
+  }
+  listDatasets(): Promise<Dataset[]> {
+    return this.req<Dataset[]>("/datasets");
+  }
+  listSamples(datasetId: string, { offset, limit, q }: Page): Promise<Sample[]> {
+    const p = new URLSearchParams({ offset: String(offset), limit: String(limit) });
+    if (q) p.set("q", q);
+    return this.req<Sample[]>(`/datasets/${encodeURIComponent(datasetId)}/samples?${p}`);
+  }
+  getSample(id: string): Promise<Sample> {
+    return this.req<Sample>(`/samples/${encodeURIComponent(id)}`);
+  }
+  fileUrl(sample: Sample, condition: ConditionKey): string {
+    return sample.images[condition] ? `${this.base}/api/samples/${encodeURIComponent(sample.id)}/file?condition=${condition}` : "";
+  }
+  listAnnotations(sampleId: string): Promise<Annotation[]> {
+    return this.req<Annotation[]>(`/samples/${encodeURIComponent(sampleId)}/annotations`);
+  }
+  createAnnotation(a: AnnotationCreate): Promise<Annotation> {
+    return this.req<Annotation>(`/samples/${encodeURIComponent(a.sample_id)}/annotations`, { method: "POST", body: JSON.stringify(a) });
+  }
+  deleteAnnotation(id: string): Promise<void> {
+    return this.req<void>(`/annotations/${encodeURIComponent(id)}`, { method: "DELETE" });
+  }
+  exportAnnotations(): Promise<Annotation[]> {
+    return this.req<Annotation[]>("/annotations");
+  }
+  async importAnnotations(list: Annotation[]): Promise<number> {
+    const r = await this.req<{ imported: number }>("/annotations/import", { method: "POST", body: JSON.stringify(list) });
+    return r.imported;
+  }
+}

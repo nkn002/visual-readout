@@ -1,0 +1,23 @@
+[build-system]
+requires = ["setuptools>=61"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "visual-readout-backend"
+version = "0.1.0"
+description = "FastAPI + SQLite backend for the visual-readout viewer"
+requires-python = ">=3.11"
+dependencies = [
+  "fastapi[standard]>=0.115",
+  "sqlmodel>=0.0.22",
+  "pydantic-settings>=2.4",
+]
+
+[project.optional-dependencies]
+dev = ["pytest", "httpx"]
+
+[tool.setuptools]
+packages = ["app", "app.routers", "app.services"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]

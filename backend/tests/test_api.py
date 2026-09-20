@@ -1,0 +1,91 @@
+import json
+
+import pytest
+
+from app.services import scan
+
+
+def test_health_reports_indexed_sample(client):
+    r = client.get("/api/health")
+    assert r.status_code == 200
+    body = r.json()
+    assert body["status"] == "ok"
+    assert body["datasets"] == 1
+    assert body["samples"] == 12
+
+
+def test_datasets_and_samples(client):
+    ds = client.get("/api/datasets").json()
+    assert len(ds) == 1 and ds[0]["kind"] == "region" and ds[0]["n_samples"] == 12
+    assert [c["key"] for c in ds[0]["conditions"]] == ["orig", "content_swap", "context_swap", "box_blank"]
+    assert len(ds[0]["arms"]) == 5
+    samples = client.get(f"/api/datasets/{ds[0]['id']}/samples").json()
+    assert [s["index"] for s in samples] == list(range(12))
+    assert set(samples[0]["readouts"]) == {a["key"] for a in ds[0]["arms"]}
+    filtered = client.get(f"/api/datasets/{ds[0]['id']}/samples", params={"q": samples[3]["head"]}).json()
+    assert samples[3]["id"] in {s["id"] for s in filtered}
+    assert client.get("/api/datasets/nope/samples").status_code == 404
+
+
+def test_sample_and_file(client):
+    s = client.get("/api/samples/cf-00").json()
+    assert s["box"] == [83, 132, 377, 82]
+    r = client.get("/api/samples/cf-00/file", params={"condition": "content_swap"})
+    assert r.status_code == 200 and r.headers["content-type"] == "image/jpeg" and len(r.content) > 1000
+    assert client.get("/api/samples/cf-00/file", params={"condition": "nope"}).status_code == 404
+    assert client.get("/api/samples/nope").status_code == 404
+
+
+def test_annotation_roundtrip(client):
+    body = {"sample_id": "cf-01", "label": "watermark", "geometry": {"type": "bbox", "x": 0.1, "y": 0.2, "w": 0.3, "h": 0.1}}
+    r = client.post("/api/samples/cf-01/annotations", json=body)
+    assert r.status_code == 201
+    ann = r.json()
+    assert ann["source"] == "human" and ann["geometry"]["type"] == "bbox"
+    assert [a["id"] for a in client.get("/api/samples/cf-01/annotations").json()] == [ann["id"]]
+    assert client.post("/api/samples/cf-01/annotations", json={**body, "id": ann["id"]}).status_code == 409
+    assert client.post("/api/samples/cf-02/annotations", json=body).status_code == 422
+    assert client.delete(f"/api/annotations/{ann['id']}").status_code == 204
+    assert client.get("/api/samples/cf-01/annotations").json() == []
+    assert client.delete(f"/api/annotations/{ann['id']}").status_code == 404
+
+
+def test_import_skips_duplicates_and_unknown_samples(client):
+    rows = [
+        {"id": "imp-1", "sample_id": "cf-02", "label": "a", "geometry": {"type": "point", "x": 0.5, "y": 0.5}, "source": "human"},
+        {"id": "imp-1", "sample_id": "cf-02", "label": "dup", "geometry": {"type": "point", "x": 0.5, "y": 0.5}, "source": "human"},
+        {"id": "imp-2", "sample_id": "nope", "label": "b", "geometry": {"type": "point", "x": 0.5, "y": 0.5}, "source": "human"},
+    ]
+    r = client.post("/api/annotations/import", json=rows)
+    assert r.json() == {"imported": 1, "skipped": 2}
+    assert "imp-1" in {a["id"] for a in client.get("/api/annotations").json()}
+
+
+def test_index_is_idempotent(client):
+    from sqlmodel import Session
+
+    from app.config import get_settings
+    from app.database import get_engine
+    from app.services.indexer import index
+
+    with Session(get_engine()) as s:
+        assert index(s, get_settings().data_path) == {"datasets": 1, "samples": 12}
+    assert client.get("/api/health").json()["samples"] == 12
+
+
+def test_scan_rejects_bad_manifests(tmp_path):
+    with pytest.raises(FileNotFoundError):
+        scan.load_manifest(tmp_path)
+    (tmp_path / "manifest.json").write_text(json.dumps({"version": 1, "datasets": [
+        {"id": "x", "name": "x", "kind": "region", "samples": [{"id": "x-0", "phrase": "p", "box": [0, 0, 1, 1],
+                                                                 "images": {"orig": "images/missing.jpg"}, "readouts": {}, "judge": {}}]}]}))
+    with pytest.raises(FileNotFoundError):
+        scan.load_manifest(tmp_path)
+
+
+def test_stage_copies_manifest_and_images(tmp_path):
+    from app.config import get_settings
+
+    out = scan.stage(get_settings().data_path, tmp_path / "out")
+    assert (out / "manifest.json").exists()
+    assert len(list((out / "images").glob("*.jpg"))) == 48

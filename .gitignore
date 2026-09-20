@@ -1,0 +1,26 @@
+# data: only data/sample is committed
+data/raw/
+data/db/
+*.db
+*.sqlite*
+
+# generated static-mode bundle (built from data/sample by backend/app/services/scan.py)
+frontend/public/data/
+
+# secrets and local config
+.env
+
+# node
+node_modules/
+frontend/dist/
+
+# python
+__pycache__/
+*.pyc
+.pytest_cache/
+backend/.venv/
+*.egg-info/
+
+# editors
+.ipynb_checkpoints/
+.DS_Store
