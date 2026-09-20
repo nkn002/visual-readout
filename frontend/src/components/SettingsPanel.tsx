@@ -40,7 +40,7 @@ export function SettingsPanel() {
         </label>
         <label className="field">
           Backend URL
-          <input id="api-base" type="url" value={draft} placeholder={DEFAULT_API_BASE || "(same origin)"} onChange={(e) => setDraft(e.target.value)} />
+          <input id="api-base" type="url" value={draft} placeholder={DEFAULT_API_BASE || "(same origin, via the dev proxy)"} onChange={(e) => setDraft(e.target.value)} />
         </label>
         <div className="row">
           <button type="button" onClick={check}>

@@ -10,8 +10,9 @@ interface SettingsState {
   setApiBase(base: string): void;
 }
 
-// In dev the Vite proxy forwards /api to the backend, so an empty base means "same origin".
-export const DEFAULT_API_BASE = import.meta.env.DEV ? "" : "http://localhost:8000";
+// In dev the Vite proxy forwards `${BASE_URL}api` to the backend, so the default stays same-origin.
+// The built page on GitHub Pages talks to a backend on the viewer's own machine.
+export const DEFAULT_API_BASE = import.meta.env.DEV ? import.meta.env.BASE_URL.replace(/\/$/, "") : "http://localhost:8000";
 
 export const useSettings = create<SettingsState>()(
   persist(
