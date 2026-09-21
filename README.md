@@ -122,146 +122,113 @@ A FastAPI service with a SQLite database. Everything is in `app/`:
 
 ## How the components interact
 
-### Components
+Four diagrams, each at one level of detail, following the C4 model: who uses the system, what runs where in each mode, how one request travels, and what the data looks like. **Key:** a box is one running part, with its technology in brackets and its job underneath. An arrow is a one-way call, labelled with what it does and how.
 
-Arrows point from the caller to what it uses. The screens only ever talk to `DataSource`; which implementation is behind it depends on the mode chosen in Settings.
+### 1. Context: who talks to what
 
 ```mermaid
+---
+title: System context
+---
 flowchart LR
-  subgraph FE["frontend/src (browser)"]
-    App["App.tsx"]
-    SL["SampleList"]
-    SB["StageBar"]
-    RV["RegionViewer + BoxTool"]
-    INS["Inspector + MentionTags"]
-    SET["SettingsPanel"]
-    ST[("stores: viewer, settings")]
-    HK["api/hooks (TanStack Query)"]
-    DS{{"DataSource interface"}}
-    SS["staticSource"]
-    AS["apiSource"]
-    LS[("localStorage")]
-  end
-  subgraph PAGES["static files (dist/ on GitHub Pages)"]
-    MAN[("data/manifest.json + images")]
-  end
-  subgraph BE["backend/app (FastAPI)"]
-    RT["routers: health, datasets, samples, annotations, describe"]
-    SV["services: indexer, describe"]
-    DB[("SQLite: Dataset, Sample, Annotation")]
-  end
-  subgraph GPU["GPU node (scripts/model_server.py)"]
-    Q["Qwen2.5-VL-7B-Instruct"]
-  end
-  App --> SL
-  App --> SB
-  App --> RV
-  App --> INS
-  App --> SET
-  SL --> ST
-  SB --> ST
-  RV --> ST
-  INS --> ST
-  SET --> ST
-  SL --> HK
-  RV --> HK
-  INS --> HK
-  HK --> DS
-  SET -. "mode: static or backend" .-> DS
-  DS --> SS
-  DS --> AS
-  SS --> MAN
-  SS --> LS
-  AS -- "fetch /api/*" --> RT
-  RT --> SV
-  RT --> DB
-  SV --> DB
-  SV -- "POST /describe" --> Q
-  SV -. "startup: load manifest" .-> MAN
+  U["Person: student or grader<br/>opens the viewer in a browser"]
+  V["Visual read-out<br/>[web app]<br/>shows an image, lets the user mark a region,<br/>and answers what is in it"]
+  Q["Qwen2.5-VL-7B-Instruct<br/>[vision-language model on a cluster GPU]<br/>answers questions about an image"]
+  R["nla research repository<br/>[files on the cluster]<br/>Visual Genome regions, read-outs, judge verdicts"]
+  U -- "draws regions, asks questions [browser]" --> V
+  V -- "asks: what is inside this box? [HTTP, JSON]" --> Q
+  R -- "exported once into data/sample [export_sample.py]" --> V
 ```
 
-### Data model
+### 2. Containers: what runs where, in each mode
 
-The same three shapes exist in `manifest.json`, in SQLite, and in `frontend/src/types/api.ts`.
+The app runs in two modes. The screens are identical; only where the data comes from and where annotations go changes.
 
 ```mermaid
+---
+title: Static mode, the public page on GitHub Pages (no server)
+---
+flowchart LR
+  B["Web app<br/>[React, runs in the browser]<br/>image list, viewer, region drawing, verdicts"]
+  F["Static files<br/>[manifest.json + 48 JPEGs, served by GitHub Pages]<br/>the 12 samples and their read-outs"]
+  L["Browser storage<br/>[localStorage]<br/>the user's annotations, exportable as JSON"]
+  B -- "reads samples and images [HTTP GET]" --> F
+  B -- "saves and reloads annotations" --> L
+```
+
+```mermaid
+---
+title: Backend mode, with the API and the model server running
+---
+flowchart LR
+  B["Web app<br/>[React, runs in the browser]<br/>the same screens"]
+  A["API<br/>[FastAPI, Python]<br/>serves samples, stores annotations,<br/>prepares model requests"]
+  D["Database<br/>[SQLite file]<br/>samples and annotations"]
+  M["Model server<br/>[Python on a GPU node]<br/>runs Qwen2.5-VL-7B-Instruct"]
+  B -- "reads samples, saves annotations [HTTP, JSON]" --> A
+  A -- "reads and writes [SQL]" --> D
+  A -- "sends the photo with the box outlined, plus the crop [HTTP, JSON]" --> M
+```
+
+### 3. One request: asking the model about a drawn region
+
+```mermaid
+---
+title: Sequence, from drawing a box to seeing the answer
+---
+sequenceDiagram
+  actor U as User
+  participant W as Web app
+  participant A as API
+  participant M as Model server
+  U->>W: drag a box on the image
+  W->>A: save the box as an annotation (source: human)
+  A-->>W: saved
+  U->>W: click "Ask Qwen2.5-VL"
+  W->>A: describe this box
+  A->>A: outline the box on the photo, enlarge the crop
+  A->>M: two images + "what is inside the red box?"
+  M-->>A: "Label: bear paws. Description: two brown paws..."
+  A->>A: save the answer as an annotation (source: model)
+  A-->>W: label and description
+  W-->>U: answer shown under the region
+```
+
+### 4. Data: what is stored
+
+The same three shapes appear in `manifest.json`, in the SQLite tables, and in the TypeScript types.
+
+```mermaid
+---
+title: Data model
+---
 classDiagram
+  direction LR
   class Dataset {
     id
     name
-    kind = "region"
     conditions
     arms
   }
   class Sample {
     id
-    dataset_id
-    image_id
+    image files, one per condition
+    box: x, y, w, h
     phrase
-    head
-    box [x, y, w, h] px
-    images {condition: file}
-    readouts {arm: {condition: text}}
-    judge {arm: {condition: verdict}}
+    read-out text per arm
+    judge verdict per arm
   }
   class Annotation {
-    id (UUID)
-    sample_id
+    id
     label
     note
-    geometry
-    source: human | model
+    geometry: box, point or tag
+    source: human or model
     created_at
   }
-  class Geometry {
-    <<union>>
-    bbox x y w h (0..1)
-    point x y
-    tag arm condition value
-  }
-  Dataset "1" --> "*" Sample
-  Sample "1" --> "*" Annotation
-  Annotation --> Geometry
+  Dataset "1" --> "many" Sample : contains
+  Sample "1" --> "many" Annotation : has
 ```
-
-### Drawing a region and asking the model
-
-```mermaid
-sequenceDiagram
-  actor U as User
-  participant RV as RegionViewer / BoxTool
-  participant INS as Inspector
-  participant HK as api/hooks
-  participant AS as apiSource
-  participant RT as routers
-  participant SV as services/describe.py
-  participant DB as SQLite
-  participant MS as model_server.py (Qwen2.5-VL)
-
-  U->>RV: drag a box on the image
-  RV->>HK: createAnnotation(bbox, label)
-  HK->>AS: POST /api/samples/{id}/annotations
-  AS->>RT: annotations.create_annotation
-  RT->>DB: insert Annotation(source = human)
-  RT-->>HK: annotation
-  HK-->>INS: re-render: region listed
-
-  U->>INS: click "Ask Qwen2.5-VL"
-  INS->>HK: describeRegion(bbox)
-  HK->>AS: POST /api/samples/{id}/describe
-  AS->>RT: describe.describe
-  RT->>SV: describe_region(image, box, model url)
-  SV->>SV: outline the box on the photo, enlarge the crop
-  SV->>MS: POST /describe {images, prompt}
-  MS-->>SV: {text: "Label: ... Description: ..."}
-  SV-->>RT: label, description
-  RT->>DB: insert Annotation(source = model, note = description)
-  RT-->>AS: DescribeResult
-  AS-->>HK: annotation
-  HK-->>INS: re-render: answer shown under the region
-```
-
-In static mode the first half is the same, except `staticSource` writes to `localStorage` instead of calling the backend, and the Ask button explains that it needs the backend.
 
 ## How the parts meet
 
