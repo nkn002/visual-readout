@@ -22,6 +22,15 @@ export const useSettings = create<SettingsState>()(
       setMode: (mode) => set({ mode }),
       setApiBase: (base) => set({ apiBase: base.trim().replace(/\/+$/, "") }),
     }),
-    { name: "visual-readout:settings" },
+    {
+      name: "visual-readout:settings",
+      // A remembered relative address ("/rnode/<node>/<port>/absproxy/5173") belongs to a previous
+      // dev session behind a different proxy; only an absolute URL the user typed is worth keeping.
+      merge: (persisted, current) => {
+        const p = (persisted ?? {}) as Partial<SettingsState>;
+        const keep = p.apiBase && /^https?:\/\//.test(p.apiBase) ? p.apiBase : DEFAULT_API_BASE;
+        return { ...current, ...p, apiBase: keep };
+      },
+    },
   ),
 );
