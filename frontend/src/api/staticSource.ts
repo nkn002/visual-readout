@@ -1,4 +1,4 @@
-import type { Annotation, AnnotationCreate, ConditionKey, Dataset, Geometry, Manifest, Page, Sample } from "../types/api";
+import type { Annotation, AnnotationCreate, AnnotationUpdate, ConditionKey, Dataset, Geometry, Manifest, Page, Sample } from "../types/api";
 import type { DataSource } from "./source";
 import { newId } from "./source";
 
@@ -67,6 +67,14 @@ export const staticSource: DataSource = {
     const ann: Annotation = { source: "human", ...a, id: a.id ?? newId(), created_at: a.created_at ?? new Date().toISOString() };
     writeAll([...readAll(), ann]);
     return ann;
+  },
+  async updateAnnotation(id: string, patch: AnnotationUpdate): Promise<Annotation> {
+    const all = readAll();
+    const i = all.findIndex((a) => a.id === id);
+    if (i < 0) throw new Error(`annotation ${id} not found`);
+    all[i] = { ...all[i], ...(patch.label !== undefined && { label: patch.label }), ...(patch.note !== undefined && { note: patch.note }) };
+    writeAll(all);
+    return all[i];
   },
   async deleteAnnotation(id: string): Promise<void> {
     writeAll(readAll().filter((a) => a.id !== id));

@@ -1,5 +1,5 @@
 import { useMemo } from "react";
-import type { Annotation, AnnotationCreate, ConditionKey, Dataset, Geometry, Page, Sample } from "../types/api";
+import type { Annotation, AnnotationCreate, AnnotationUpdate, ConditionKey, Dataset, Geometry, Page, Sample } from "../types/api";
 import { useSettings } from "../stores/settingsStore";
 import { staticSource } from "./staticSource";
 import { ApiSource } from "./apiSource";
@@ -13,6 +13,7 @@ export interface DataSource {
   fileUrl(sample: Sample, condition: ConditionKey): string;
   listAnnotations(sampleId: string): Promise<Annotation[]>;
   createAnnotation(a: AnnotationCreate): Promise<Annotation>;
+  updateAnnotation(id: string, patch: AnnotationUpdate): Promise<Annotation>;
   deleteAnnotation(id: string): Promise<void>;
   exportAnnotations(): Promise<Annotation[]>;
   importAnnotations(list: Annotation[]): Promise<number>;

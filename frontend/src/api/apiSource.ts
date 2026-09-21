@@ -1,4 +1,4 @@
-import type { Annotation, AnnotationCreate, ConditionKey, Dataset, DescribeResult, Geometry, Health, Page, Sample } from "../types/api";
+import type { Annotation, AnnotationCreate, AnnotationUpdate, ConditionKey, Dataset, DescribeResult, Geometry, Health, Page, Sample } from "../types/api";
 import type { DataSource } from "./source";
 
 export class ApiSource implements DataSource {
@@ -50,6 +50,9 @@ export class ApiSource implements DataSource {
   }
   createAnnotation(a: AnnotationCreate): Promise<Annotation> {
     return this.req<Annotation>(`/samples/${encodeURIComponent(a.sample_id)}/annotations`, { method: "POST", body: JSON.stringify(a) });
+  }
+  updateAnnotation(id: string, patch: AnnotationUpdate): Promise<Annotation> {
+    return this.req<Annotation>(`/annotations/${encodeURIComponent(id)}`, { method: "PATCH", body: JSON.stringify(patch) });
   }
   deleteAnnotation(id: string): Promise<void> {
     return this.req<void>(`/annotations/${encodeURIComponent(id)}`, { method: "DELETE" });

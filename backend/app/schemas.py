@@ -38,6 +38,11 @@ class AnnotationCreate(SQLModel):
     created_at: datetime | None = None
 
 
+class AnnotationUpdate(SQLModel):
+    label: str | None = None
+    note: str | None = None
+
+
 class AnnotationRead(SQLModel):
     id: str
     sample_id: str

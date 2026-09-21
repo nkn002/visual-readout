@@ -8,7 +8,7 @@ from sqlmodel import select
 from ..database import SessionDep
 from ..dependencies import SampleDep
 from ..models import Annotation, Sample
-from ..schemas import AnnotationCreate, AnnotationRead, ImportResult
+from ..schemas import AnnotationCreate, AnnotationRead, AnnotationUpdate, ImportResult
 
 router = APIRouter(prefix="/api", tags=["annotations"])
 
@@ -33,6 +33,22 @@ def create_annotation(sample: SampleDep, body: AnnotationCreate, session: Sessio
         raise HTTPException(409, f"annotation {ann_id!r} already exists")
     row = Annotation(id=ann_id, sample_id=sample.id, label=body.label, note=body.note, geometry=body.geometry, source=body.source,
                      **({"created_at": body.created_at} if body.created_at else {}))
+    session.add(row)
+    session.commit()
+    session.refresh(row)
+    return row
+
+
+@router.patch("/annotations/{annotation_id}", response_model=AnnotationRead)
+def update_annotation(annotation_id: str, body: AnnotationUpdate, session: SessionDep) -> Annotation:
+    """Change the label or note of an existing annotation; the box itself stays as drawn."""
+    row = session.get(Annotation, annotation_id)
+    if row is None:
+        raise HTTPException(404, f"annotation {annotation_id!r} not found")
+    if body.label is not None:
+        row.label = body.label
+    if body.note is not None:
+        row.note = body.note
     session.add(row)
     session.commit()
     session.refresh(row)

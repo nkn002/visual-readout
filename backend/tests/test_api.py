@@ -45,6 +45,9 @@ def test_annotation_roundtrip(client):
     assert [a["id"] for a in client.get("/api/samples/cf-01/annotations").json()] == [ann["id"]]
     assert client.post("/api/samples/cf-01/annotations", json={**body, "id": ann["id"]}).status_code == 409
     assert client.post("/api/samples/cf-02/annotations", json=body).status_code == 422
+    r = client.patch(f"/api/annotations/{ann['id']}", json={"label": "logo"})
+    assert r.status_code == 200 and r.json()["label"] == "logo" and r.json()["geometry"] == ann["geometry"]
+    assert client.patch("/api/annotations/nope", json={"label": "x"}).status_code == 404
     assert client.delete(f"/api/annotations/{ann['id']}").status_code == 204
     assert client.get("/api/samples/cf-01/annotations").json() == []
     assert client.delete(f"/api/annotations/{ann['id']}").status_code == 404

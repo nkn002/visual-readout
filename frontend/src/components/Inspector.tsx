@@ -1,6 +1,6 @@
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useDataSource } from "../api/source";
-import { useDescribeRegion, useImportAnnotations } from "../api/hooks";
+import { useDescribeRegion, useImportAnnotations, useUpdateAnnotation } from "../api/hooks";
 import { MentionTags } from "../features/annotate/MentionTags";
 import type { Annotation, AnnotationCreate, Arm, ConditionKey, Dataset, Geometry, Sample, Verdict } from "../types/api";
 
@@ -30,6 +30,46 @@ function Badge({ v }: { v: Verdict | null | undefined }) {
   );
 }
 
+/** The label as text; click to edit, Enter or blur saves, Escape cancels. */
+function EditableLabel({ value, onSave }: { value: string; onSave(label: string): void }) {
+  const [editing, setEditing] = useState(false);
+  const [draft, setDraft] = useState(value);
+  const ref = useRef<HTMLInputElement>(null);
+  useEffect(() => setDraft(value), [value]);
+  useEffect(() => {
+    if (editing) ref.current?.select();
+  }, [editing]);
+  const commit = () => {
+    setEditing(false);
+    const next = draft.trim();
+    if (next && next !== value) onSave(next);
+    else setDraft(value);
+  };
+  if (!editing)
+    return (
+      <button type="button" className="editable" title="Click to rename" onClick={() => setEditing(true)}>
+        {value || "(no label)"}
+      </button>
+    );
+  return (
+    <input
+      ref={ref}
+      className="editing"
+      value={draft}
+      onChange={(e) => setDraft(e.target.value)}
+      onBlur={commit}
+      onKeyDown={(e) => {
+        if (e.key === "Enter") commit();
+        if (e.key === "Escape") {
+          setDraft(value);
+          setEditing(false);
+        }
+      }}
+      aria-label="Region label"
+    />
+  );
+}
+
 function describeGeometry(a: Annotation, size: number[] | null): string {
   const g = a.geometry;
   const [w, h] = size ?? [1, 1];
@@ -43,6 +83,7 @@ export function Inspector(p: Props) {
   const src = useDataSource();
   const importMut = useImportAnnotations();
   const describe = useDescribeRegion(sample?.id);
+  const update = useUpdateAnnotation(sample?.id);
   const fileRef = useRef<HTMLInputElement>(null);
   const [status, setStatus] = useState<string>("");
   const [asking, setAsking] = useState<string | null>(null);
@@ -126,7 +167,7 @@ export function Inspector(p: Props) {
               <div className="row">
                 <span className={`kind ${a.geometry.type}`}>{a.geometry.type}</span>
                 <span className="lbl">
-                  {a.label}
+                  <EditableLabel value={a.label} onSave={(label) => update.mutate({ id: a.id, patch: { label } })} />
                   <small>{describeGeometry(a, sample.image_size)}</small>
                 </span>
                 <button type="button" className="ask" disabled={asking !== null} onClick={() => void ask(a)} title="Send this region to Qwen2.5-VL and ask what it is">

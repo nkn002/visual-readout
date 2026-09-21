@@ -67,6 +67,11 @@ export interface AnnotationCreate {
   created_at?: string;
 }
 
+export interface AnnotationUpdate {
+  label?: string;
+  note?: string;
+}
+
 export interface Health {
   status: string;
   datasets: number;
