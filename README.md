@@ -120,24 +120,155 @@ A FastAPI service with a SQLite database. Everything is in `app/`:
 
 `pages.yml` builds the frontend and deploys it to `nkn002.github.io/visual-readout` on every push to `main`. `test.yml` runs the backend tests and the frontend build on every push.
 
+## How the components interact
+
+### Components
+
+Arrows point from the caller to what it uses. The screens only ever talk to `DataSource`; which implementation is behind it depends on the mode chosen in Settings.
+
+```mermaid
+flowchart LR
+  subgraph FE["frontend/src (browser)"]
+    App["App.tsx"]
+    SL["SampleList"]
+    SB["StageBar"]
+    RV["RegionViewer + BoxTool"]
+    INS["Inspector + MentionTags"]
+    SET["SettingsPanel"]
+    ST[("stores: viewer, settings")]
+    HK["api/hooks (TanStack Query)"]
+    DS{{"DataSource interface"}}
+    SS["staticSource"]
+    AS["apiSource"]
+    LS[("localStorage")]
+  end
+  subgraph PAGES["static files (dist/ on GitHub Pages)"]
+    MAN[("data/manifest.json + images")]
+  end
+  subgraph BE["backend/app (FastAPI)"]
+    RT["routers: health, datasets, samples, annotations, describe"]
+    SV["services: indexer, describe"]
+    DB[("SQLite: Dataset, Sample, Annotation")]
+  end
+  subgraph GPU["GPU node (scripts/model_server.py)"]
+    Q["Qwen2.5-VL-7B-Instruct"]
+  end
+  App --> SL
+  App --> SB
+  App --> RV
+  App --> INS
+  App --> SET
+  SL --> ST
+  SB --> ST
+  RV --> ST
+  INS --> ST
+  SET --> ST
+  SL --> HK
+  RV --> HK
+  INS --> HK
+  HK --> DS
+  SET -. "mode: static or backend" .-> DS
+  DS --> SS
+  DS --> AS
+  SS --> MAN
+  SS --> LS
+  AS -- "fetch /api/*" --> RT
+  RT --> SV
+  RT --> DB
+  SV --> DB
+  SV -- "POST /describe" --> Q
+  SV -. "startup: load manifest" .-> MAN
+```
+
+### Data model
+
+The same three shapes exist in `manifest.json`, in SQLite, and in `frontend/src/types/api.ts`.
+
+```mermaid
+classDiagram
+  class Dataset {
+    id
+    name
+    kind = "region"
+    conditions
+    arms
+  }
+  class Sample {
+    id
+    dataset_id
+    image_id
+    phrase
+    head
+    box [x, y, w, h] px
+    images {condition: file}
+    readouts {arm: {condition: text}}
+    judge {arm: {condition: verdict}}
+  }
+  class Annotation {
+    id (UUID)
+    sample_id
+    label
+    note
+    geometry
+    source: human | model
+    created_at
+  }
+  class Geometry {
+    <<union>>
+    bbox x y w h (0..1)
+    point x y
+    tag arm condition value
+  }
+  Dataset "1" --> "*" Sample
+  Sample "1" --> "*" Annotation
+  Annotation --> Geometry
+```
+
+### Drawing a region and asking the model
+
+```mermaid
+sequenceDiagram
+  actor U as User
+  participant RV as RegionViewer / BoxTool
+  participant INS as Inspector
+  participant HK as api/hooks
+  participant AS as apiSource
+  participant RT as routers
+  participant SV as services/describe.py
+  participant DB as SQLite
+  participant MS as model_server.py (Qwen2.5-VL)
+
+  U->>RV: drag a box on the image
+  RV->>HK: createAnnotation(bbox, label)
+  HK->>AS: POST /api/samples/{id}/annotations
+  AS->>RT: annotations.create_annotation
+  RT->>DB: insert Annotation(source = human)
+  RT-->>HK: annotation
+  HK-->>INS: re-render: region listed
+
+  U->>INS: click "Ask Qwen2.5-VL"
+  INS->>HK: describeRegion(bbox)
+  HK->>AS: POST /api/samples/{id}/describe
+  AS->>RT: describe.describe
+  RT->>SV: describe_region(image, box, model url)
+  SV->>SV: outline the box on the photo, enlarge the crop
+  SV->>MS: POST /describe {images, prompt}
+  MS-->>SV: {text: "Label: ... Description: ..."}
+  SV-->>RT: label, description
+  RT->>DB: insert Annotation(source = model, note = description)
+  RT-->>AS: DescribeResult
+  AS-->>HK: annotation
+  HK-->>INS: re-render: answer shown under the region
+```
+
+In static mode the first half is the same, except `staticSource` writes to `localStorage` instead of calling the backend, and the Ask button explains that it needs the backend.
+
 ## How the parts meet
 
 Two modes, one interface. On GitHub Pages there is no server, so the page reads `manifest.json` directly and keeps annotations in the browser. With the backend running, the same page saves to SQLite and can ask Qwen. The user switches in Settings; the components do not change.
 
 Annotations are rows `{id, sample_id, label, note, geometry, source, created_at}`. `geometry` is JSON: `{"type": "bbox", x, y, w, h}` in normalised image coordinates, `{"type": "point", x, y}`, or `{"type": "tag", arm, condition, value}`. A model answer is a row with `source = "model"`, the short label in `label` and the sentence in `note`. IDs are UUIDs made in the browser, so a JSON export from static mode imports into the database without collisions.
 
-## Why React and not a plain HTML page
-
-An academic page is a document: fixed content, no state. This page has state: the selected image, the active tool, boxes being dragged, annotations that change, two data sources. React splits that into components that re-render when state changes, and TypeScript checks that the data shapes match the backend. The compiled `dist/` is still a plain static site, the same kind of thing as a paper page; only the source is organised as an app.
-
 ## Libraries
 
 Frontend: React 19, Vite 8, TypeScript, TanStack Query (server data), Zustand (UI state), react-zoom-pan-pinch (zoom and pan). Backend: FastAPI, SQLModel (SQLAlchemy + Pydantic), SQLite, pydantic-settings, Pillow, httpx, pytest. Model server: PyTorch, Transformers, Qwen2.5-VL-7B-Instruct.
-
-## Working on it with an agent
-
-A new data type is a new component registered in `frontend/src/features/viewer/registry.ts` that takes `ViewerProps`. A new annotation shape is a new `Geometry` variant in `frontend/src/types/api.ts`, drawn in `RegionViewer.tsx`. A new endpoint is a router in `backend/app/routers/` included in `main.py`, with a test in `backend/tests/`. A trained model for a later homework loads in `scripts/model_server.py` or in the backend's `lifespan`, and its outputs are stored as annotations with `source = "model"`.
-
-## Roadmap
-
-HW2: a classifier for whether a read-out names the object, trained on the judge verdicts and the user's tags. HW3: predictions drawn as `source = "model"` boxes next to human ones. HW4: region-level edits and read-out comparison at scale.
