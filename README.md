@@ -75,7 +75,7 @@ Beside them: `docs/DESIGN.md` (why it is built this way), `compose.yml` (fronten
 ### `data/` — what the viewer shows
 
 - `sample/` is the only data committed. It is small (12 images, 3 MB) so the app works from a fresh clone and on GitHub Pages.
-  - `manifest.json` is the index of the 12 samples. For each one it lists the image files, the region box, the phrase, the read-out text of each verbalizer arm, and the judge's verdict. The web page and the backend both read this one file, so they always agree on what a sample is.
+  - `manifest.json` is the index of the 12 samples. For each one it lists the image files, the region box, the phrase, the read-out text of each verbalizer arm, and the judge's verdict. Two files read it: `frontend/src/api/staticSource.ts` in static mode and `backend/app/services/indexer.py` in backend mode, so the page and the API always agree on what a sample is.
   - `images/` holds the JPEGs, four per sample: the original and three edited versions. HW1 shows the original; the edits are for later homeworks.
 - `raw/` and `db/` are ignored by git. `raw/` is for the full dataset, `db/` for the SQLite database and the model server's address.
 
@@ -83,38 +83,58 @@ Beside them: `docs/DESIGN.md` (why it is built this way), `compose.yml` (fronten
 
 Built with React and Vite. The source is in `src/`; `npm run build` compiles it into `dist/`, a plain static site, which is what GitHub Pages serves.
 
-- `main.tsx` starts the app. `App.tsx` lays out the three panes and handles keyboard shortcuts.
+A user action travels: `components/` → `stores/` for UI state and `api/hooks.ts` for data → `api/source.ts`, which hands the call to `staticSource.ts` (reads `manifest.json`, keeps annotations in the browser; what GitHub Pages runs) or to `apiSource.ts` (sends JSON to the backend's `/api/...` routes) → the answer comes back the same way and the screen re-renders. The files below are listed in that order.
+
+- `main.tsx` starts the app. `App.tsx` lays out the three panes, handles keyboard shortcuts, and asks `hooks.ts` for the dataset, the sample list, and the selected image's annotations.
 - `components/` — the panes and bars.
-  - `SampleList.tsx`: the left column, one thumbnail per image.
-  - `StageBar.tsx`: above the image, the drawing tool and the **Default region** button.
-  - `Inspector.tsx`: the right column. The user's regions with an **Ask Qwen2.5-VL** button each, the default region's phrase and read-out when revealed, and export/import.
-  - `Header.tsx`: the title and the data-source badge. `SettingsPanel.tsx`: switch between static mode and backend mode.
-- `features/viewer/` — the image itself.
-  - `RegionViewer.tsx` shows the photo with zoom and pan and draws boxes over it.
-  - `types.ts` is the contract every viewer satisfies; `registry.ts` maps a data kind to its viewer, so a time-series or mesh viewer could plug in beside this one.
-- `features/annotate/` — the two ways to annotate: `BoxTool.tsx` (drag to draw a region) and `MentionTags.tsx` (names-it / misses-it verdict on a read-out).
-- `api/` — where the data comes from. `source.ts` defines one interface; `staticSource.ts` fulfils it from `manifest.json` and the browser's local storage; `apiSource.ts` fulfils it from the backend. `hooks.ts` gives the components one way to ask for data, so they never know which source answered.
-- `stores/` — small pieces of UI state: the selected image, the active tool, whether the default region is shown, and the chosen data source.
-- `types/api.ts` — the TypeScript shapes of samples and annotations, matching `manifest.json` and the backend.
+  - `SampleList.tsx`: the left column, one thumbnail per image. Thumbnails are `<img>` tags whose URL comes from the data source (a file in static mode, `GET /api/samples/{id}/file` in backend mode).
+  - `StageBar.tsx`: above the image, the drawing tool and the **Default region** button. Writes only to `stores/viewerStore.ts`.
+  - `Inspector.tsx`: the right column. Lists the user's regions; its **Ask Qwen2.5-VL** button calls `useDescribeRegion` in `hooks.ts`, its delete buttons call `useDeleteAnnotation`, and export/import go through the data source.
+  - `Header.tsx`: the title and the data-source badge. `SettingsPanel.tsx`: switches between static and backend mode in `stores/settingsStore.ts`, and its **Check connection** button calls the backend's `GET /api/health` directly.
+- `features/viewer/` — the image itself. `RegionViewer.tsx` shows the photo with zoom and pan and draws every box it is given. `types.ts` is the contract every viewer satisfies; `registry.ts` maps a data kind to its viewer, so a time-series or mesh viewer could plug in beside this one.
+- `features/annotate/` — the two ways to annotate. `BoxTool.tsx` turns a drag into a box and hands it to `hooks.ts` as `createAnnotation`; `MentionTags.tsx` does the same for a names-it / misses-it verdict.
+- `stores/` — small pieces of UI state that the panes share: `viewerStore.ts` (selected image, active tool, default region shown or not) and `settingsStore.ts` (static or backend, backend URL). No network calls here.
+- `api/hooks.ts` — the one door to data. `useSamples`, `useAnnotations`, `useCreateAnnotation`, `useDeleteAnnotation`, `useDescribeRegion` wrap the calls in TanStack Query, so a save refreshes the list automatically. Every hook calls whatever `source.ts` returns.
+- `api/source.ts` — the `DataSource` interface (list samples, get an image URL, list/create/delete annotations, describe a region) and `useDataSource()`, which returns `staticSource` or `apiSource` according to `settingsStore`. The panes never know which one answered.
+- `api/staticSource.ts` — fulfils the interface with no server: fetches `data/manifest.json`, points image URLs at the bundled JPEGs, keeps annotations in `localStorage`, and rejects `describeRegion` with "needs the backend".
+- `api/apiSource.ts` — the **only file that talks to the backend**. Each method is one HTTP call, answered by one backend file:
+  - `listDatasets`, `listSamples` → `GET /api/datasets`, `GET /api/datasets/{id}/samples` → `backend/app/routers/datasets.py`
+  - `fileUrl` → `GET /api/samples/{id}/file?condition=orig` → `routers/samples.py`
+  - `listAnnotations`, `createAnnotation`, `deleteAnnotation`, `exportAnnotations`, `importAnnotations` → `GET/POST /api/samples/{id}/annotations`, `DELETE /api/annotations/{id}`, `GET /api/annotations`, `POST /api/annotations/import` → `routers/annotations.py`
+  - `describeRegion` → `POST /api/samples/{id}/describe` with the box → `routers/describe.py`
+  - `health` → `GET /api/health` → `routers/health.py`
+
+  In local development Vite forwards `/api/*` to port 8000; from the public page the URL set in Settings is used, which is why the backend's `CORS_ORIGINS` lists the Pages origin.
+- `types/api.ts` — the TypeScript shapes of samples, annotations, and responses: the same shapes `manifest.json` holds and the backend's `schemas.py` returns.
 - `index.css` — all styling, light and dark.
 
 ### `backend/` — saving and asking the model
 
-A FastAPI service with a SQLite database. Everything is in `app/`:
+A FastAPI service with a SQLite database. Everything is in `app/`.
 
-- `main.py` creates the service. At startup it creates the tables and loads `manifest.json` into the database.
-- `config.py` reads settings from `.env`: where the data is, where the database is, and where the model server is.
-- `models.py` defines the three tables: Dataset, Sample, Annotation. An annotation is a box, a point, or a verdict, with a `source` of `human` or `model`.
-- `schemas.py` defines what requests and responses look like.
-- `routers/` — the endpoints, one file per resource: `health.py` (is it up, is the model up), `datasets.py` and `samples.py` (list samples, serve images), `annotations.py` (create, list, delete, export, import), `describe.py` (ask the model about a box).
-- `services/` — the logic behind the endpoints: `scan.py` validates the manifest and copies it into the web build; `indexer.py` loads it into SQLite; `describe.py` outlines the user's box on the photo, enlarges the crop, sends both to the model server, and parses the answer.
-- `tests/` — 11 tests that run the whole service against the sample data.
+A request from `apiSource.ts` enters `main.py` → the file in `routers/` that owns that URL, with the body checked against `schemas.py` → `services/` for any real work → `models.py` and `database.py` to read or write SQLite, or `services/describe.py` → `scripts/model_server.py` on the GPU for a model answer → a JSON reply to the browser. The files below are listed in that order.
+
+- `main.py` creates the service, allows the frontend's origins (CORS), and includes every router. At startup it creates the tables and runs `services/indexer.py` so the database holds the manifest before the first request.
+- `config.py` reads settings from `.env`: where the data is, where the database is, which origins may call, and where the model server is. `main.py`, `database.py`, and `services/describe.py` read from it.
+- `routers/` — the endpoints, one file per resource. Each states which frontend action reaches it and what it sends back:
+  - `health.py` — Settings → **Check connection**. Returns whether the API is up and whether the model server answers.
+  - `datasets.py` — page load and the image list. Returns the dataset and its samples, each exactly one manifest record.
+  - `samples.py` — every `<img>` tag in backend mode. Returns the JPEG bytes for a sample and condition.
+  - `annotations.py` — drawing a box, giving a verdict, deleting, export and import. Returns the stored row (an `Annotation`) or the count imported.
+  - `describe.py` — the **Ask Qwen2.5-VL** button. Hands the box to `services/describe.py`, stores the answer as an annotation with `source = "model"`, and returns the label, the description, and that stored row.
+- `schemas.py` defines what every request and response looks like. The frontend's `types/api.ts` mirrors it.
+- `services/` — the logic behind the endpoints, with no HTTP of its own.
+  - `scan.py` validates the manifest and, in the Pages workflow, copies it into the web build.
+  - `indexer.py`, run by `main.py` at startup, loads the manifest into the Dataset and Sample tables through `models.py`.
+  - `describe.py`, called by `routers/describe.py`: outlines the user's box on the photo, enlarges the crop, sends both with a prompt to `scripts/model_server.py` (`POST /describe`), and parses the "Label / Description" reply. It finds the model server through `MODEL_URL` or the file `data/db/model_server.url`.
+- `database.py` opens SQLite and gives each request one session. `models.py` defines the three tables: Dataset, Sample, Annotation. An annotation is a row `{id, sample_id, label, note, geometry, source, created_at}`; `geometry` is a box, a point, or a verdict tag in normalised image coordinates, and `source` is `human` or `model`. IDs are UUIDs made in the browser, so a JSON export from static mode imports without collisions.
+- `tests/` — 11 tests that run the whole service against the sample data, with the model server replaced by a stand-in.
 
 ### `scripts/` — running it
 
 - `export_sample.py` builds `data/sample/` from the research repository. Run once when the data changes.
 - `dev.sh` starts the frontend and backend and prints the URLs, including the proxy addresses needed inside the cluster's VS Code sessions.
-- `model_server.py` loads Qwen2.5-VL-7B-Instruct on a GPU and answers "what is in this box" over HTTP. `model_server.sbatch` runs it as a Slurm job.
+- `model_server.py` loads Qwen2.5-VL-7B-Instruct on a GPU and answers over HTTP. `backend/app/services/describe.py` calls it with two images and a prompt; it returns `{text, model, seconds}`. On start it writes its address to `data/db/model_server.url`, so the backend finds it without a restart. `model_server.sbatch` runs it as a Slurm job.
 
 ### `.github/workflows/` — publishing
 
@@ -336,67 +356,6 @@ classDiagram
   Dataset "1" --> "many" Sample : contains
   Sample "1" --> "many" Annotation : has
 ```
-
-## How the frontend and backend talk
-
-The page and the API share one contract: a handful of JSON endpoints. In static mode the page skips them and reads `manifest.json` directly; in backend mode every one of these calls goes over HTTP.
-
-| What the user does | Frontend call (`api/apiSource.ts`) | Request | Backend handler | Response |
-|---|---|---|---|---|
-| Opens the page | `listDatasets()` | `GET /api/datasets` | `routers/datasets.py` | `[{id, name, kind, conditions, arms, n_samples}]` |
-| Sees the image list | `listSamples(datasetId)` | `GET /api/datasets/cf/samples?offset=0&limit=500` | `routers/datasets.py` | `[Sample, ...]`, each exactly one manifest record |
-| Views an image | `fileUrl(sample, "orig")` in an `<img>` tag | `GET /api/samples/cf-01/file?condition=orig` | `routers/samples.py` | the JPEG bytes |
-| Selects an image | `listAnnotations(sampleId)` | `GET /api/samples/cf-01/annotations` | `routers/annotations.py` | `[Annotation, ...]` |
-| Draws a box | `createAnnotation(a)` | `POST /api/samples/cf-01/annotations` with `{sample_id, label, geometry}` | `routers/annotations.py` | the stored `Annotation` (201) |
-| Clicks **Ask Qwen2.5-VL** | `describeRegion(sampleId, geometry)` | `POST /api/samples/cf-01/describe` with `{geometry}` | `routers/describe.py` | `{label, description, model, annotation}` |
-| Deletes an annotation | `deleteAnnotation(id)` | `DELETE /api/annotations/{id}` | `routers/annotations.py` | 204 |
-| Checks the connection in Settings | `health()` | `GET /api/health` | `routers/health.py` | `{status, samples, model_url, model_ready, model_name}` |
-
-The browser reaches the API through the Vite dev proxy in local development (`/api/*` is forwarded to port 8000, so there is no cross-origin request) and directly by URL from the public page, which is why `CORS_ORIGINS` in `.env` lists the Pages origin.
-
-### What happens when the user clicks Ask Qwen2.5-VL
-
-The user has drawn a box on image `cf-01`; it is already stored as a human annotation. Then:
-
-1. **`Inspector.tsx`** calls `ask(region)`, which runs the `useDescribeRegion` mutation from `api/hooks.ts` with the region's geometry: `{"type": "bbox", "x": 0.30, "y": 0.30, "w": 0.40, "h": 0.40}`. Coordinates are fractions of the image, so they do not depend on zoom or screen size. The button shows "Asking…".
-2. **`apiSource.ts`** sends the request:
-   ```http
-   POST /api/samples/cf-01/describe
-   content-type: application/json
-
-   {"geometry": {"type": "bbox", "x": 0.30, "y": 0.30, "w": 0.40, "h": 0.40}}
-   ```
-3. **`routers/describe.py`** receives it. FastAPI resolves the sample from the URL (`dependencies.py`, 404 if unknown) and validates the body against `DescribeRequest` in `schemas.py` (422 if the geometry is not a box). The handler looks up the image file for the `orig` condition from the sample's manifest record and asks `services/describe.py` for the model server's address: `MODEL_URL` from `.env`, else the file `data/db/model_server.url` that the model server wrote when it started. No address means a 503 with the message "the Qwen2.5-VL model server is not running".
-4. **`services/describe.py`**, `render_inputs`, prepares two JPEGs with Pillow: the whole photo with the box outlined in red, and the box cropped with a small margin and enlarged so its short side is at least 320 px. Both are base64-encoded.
-5. **`services/describe.py`**, `describe_region`, posts to the model server on the GPU node:
-   ```http
-   POST http://udc-an28-35:8100/describe
-
-   {"images": ["<base64 jpeg>", "<base64 jpeg>"],
-    "prompt": "The first image is a photo with a red box drawn on it. The second image shows the inside of that box, enlarged. What is inside the red box? Answer in exactly this format: Label: ... Description: ...",
-    "max_new_tokens": 96}
-   ```
-6. **`scripts/model_server.py`** decodes the images, builds a Qwen chat message with two image entries and the prompt, runs `generate` (greedy, no sampling), and replies within a few seconds:
-   ```json
-   {"text": "Label: Bear paws\nDescription: Two brown bear paws are clasped together, one paw slightly raised above the other, against a backdrop of green foliage.",
-    "model": "Qwen/Qwen2.5-VL-7B-Instruct", "seconds": 2.4}
-   ```
-   If the model server cannot be reached the backend answers 503; if it takes longer than 180 s, 504; if it errors, 502 with the message.
-7. **`services/describe.py`**, `parse_answer`, splits the text into the label and the sentence. **`routers/describe.py`** stores a new row through `models.py`: `Annotation(source="model", label="Bear paws", note="Two brown bear paws...", geometry=<the same box>)`, and replies:
-   ```json
-   {"label": "Bear paws", "description": "Two brown bear paws are clasped together, ...",
-    "model": "Qwen/Qwen2.5-VL-7B-Instruct",
-    "annotation": {"id": "…", "sample_id": "cf-01", "label": "Bear paws", "note": "…", "geometry": {"type": "bbox", "x": 0.3, "y": 0.3, "w": 0.4, "h": 0.4}, "source": "model", "created_at": "…"}}
-   ```
-8. **`api/hooks.ts`** marks the annotations query for `cf-01` stale, so TanStack Query refetches `GET /api/samples/cf-01/annotations`. **`Inspector.tsx`** finds the model annotation whose box equals the user's box and renders the label and sentence under that region; **`RegionViewer.tsx`** draws the model's box in purple on the image. On failure, the error message is shown under the region instead.
-
-The same trace in static mode stops at step 2: `staticSource.describeRegion` rejects with "Asking the model needs the backend", because there is no server behind GitHub Pages.
-
-### Two modes, one interface
-
-On GitHub Pages there is no server, so the page reads `manifest.json` directly and keeps annotations in the browser. With the backend running, the same page saves to SQLite and can ask Qwen. The user switches in Settings; the components do not change.
-
-Annotations are rows `{id, sample_id, label, note, geometry, source, created_at}`. `geometry` is JSON: `{"type": "bbox", x, y, w, h}` in normalised image coordinates, `{"type": "point", x, y}`, or `{"type": "tag", arm, condition, value}`. A model answer is a row with `source = "model"`, the short label in `label` and the sentence in `note`. IDs are UUIDs made in the browser, so a JSON export from static mode imports into the database without collisions.
 
 ## Why React and not a plain HTML page
 
