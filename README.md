@@ -122,7 +122,7 @@ A FastAPI service with a SQLite database. Everything is in `app/`:
 
 ## How the components interact
 
-Four diagrams, each at one level of detail, following the C4 model: who uses the system, what runs where in each mode, how one request travels, and what the data looks like. **Key:** a box is one running part, with its technology in brackets and its job underneath. An arrow is a one-way call, labelled with what it does and how.
+Diagrams at four levels of zoom, following the C4 model: who uses the system, what runs where in each mode, which files inside each part call which, how one request travels, and what the data looks like. **Key:** a box is one running part, with its technology in brackets and its job underneath. An arrow is a one-way call, labelled with what it does and how.
 
 ### 1. Context: who talks to what
 
@@ -170,7 +170,114 @@ flowchart LR
   A -- "sends the photo with the box outlined, plus the crop [HTTP, JSON]" --> M
 ```
 
-### 3. One request: asking the model about a drawn region
+### 3. Components: how the files inside the web app interact
+
+Read left to right: what the user sees, the UI state it shares, and the data layer that hides where data comes from. `types/api.ts` (not drawn) defines the shapes every file below uses.
+
+```mermaid
+---
+title: Inside the web app (frontend/src)
+---
+flowchart LR
+  subgraph UI["components/ and features/ — what the user sees"]
+    direction TB
+    App["App.tsx<br/>lays out the panes, keyboard shortcuts"]
+    SL["SampleList.tsx<br/>image list"]
+    SB["StageBar.tsx<br/>draw or pan tool, Default region button"]
+    RV["RegionViewer.tsx + BoxTool.tsx<br/>image, zoom, boxes, drag to draw"]
+    INS["Inspector.tsx + MentionTags.tsx<br/>your regions, Ask button, read-out, export"]
+    SET["SettingsPanel.tsx<br/>static or backend"]
+    App --> SL
+    App --> SB
+    App --> RV
+    App --> INS
+    App --> SET
+  end
+  subgraph STATE["stores/ — shared UI state"]
+    VS["viewerStore.ts<br/>selected image, tool, default region on or off"]
+    SS["settingsStore.ts<br/>mode, backend URL"]
+  end
+  subgraph DATA["api/ — where data comes from"]
+    direction TB
+    HK["hooks.ts<br/>useSamples, useAnnotations, useDescribeRegion"]
+    SRC["source.ts<br/>DataSource interface, picked by mode"]
+    ST["staticSource.ts<br/>reads manifest.json, keeps annotations in localStorage"]
+    AP["apiSource.ts<br/>calls the API over HTTP"]
+    HK --> SRC
+    SRC --> ST
+    SRC --> AP
+  end
+  UI -- "read and set" --> VS
+  SET -- "sets" --> SS
+  SS -- "chooses static or api" --> SRC
+  SL -- "list samples" --> HK
+  RV -- "create annotation" --> HK
+  INS -- "list, delete, describe" --> HK
+```
+
+### 4. Components: how the files inside the API interact
+
+Requests enter through `routers/`, logic lives in `services/`, and only `database.py` and `models.py` touch SQLite. Not drawn: `config.py` hands settings from `.env` to `main.py`, `database.py`, and `services/describe.py`; `schemas.py` defines the request and response shapes every router validates with.
+
+```mermaid
+---
+title: Inside the API (backend/app)
+---
+flowchart LR
+  MAIN["main.py<br/>creates the app, adds CORS,<br/>at startup: create tables, index the manifest"]
+  subgraph RT["routers/ — one file per resource, validated by schemas.py"]
+    direction TB
+    RH["health.py<br/>is the API up, is the model up"]
+    RD["datasets.py, samples.py<br/>list samples, serve image files"]
+    RA["annotations.py<br/>create, list, delete, export, import"]
+    RX["describe.py<br/>ask the model about a box"]
+  end
+  subgraph SVC["services/ — logic without HTTP"]
+    direction TB
+    IDX["indexer.py<br/>manifest rows into the tables"]
+    SCAN["scan.py<br/>validates the manifest"]
+    DSC["describe.py<br/>outline the box, enlarge the crop,<br/>call the model server, parse the answer"]
+  end
+  subgraph STORE["database.py + models.py — the only files that touch SQLite"]
+    direction TB
+    DBM["database.py<br/>engine, one session per request"]
+    MOD["models.py<br/>Dataset, Sample, Annotation tables"]
+  end
+  DB[("SQLite<br/>data/db/app.db")]
+  MS["scripts/model_server.py<br/>Qwen2.5-VL on a GPU node"]
+  MAIN -- "includes" --> RT
+  MAIN -- "runs at startup" --> IDX
+  IDX -- "validates with" --> SCAN
+  RT -- "reads and writes rows" --> STORE
+  IDX -- "inserts rows" --> STORE
+  RX -- "calls" --> DSC
+  DSC -- "POST /describe [HTTP, JSON]" --> MS
+  STORE -- "SQL" --> DB
+```
+
+### 5. Build and run: how the scripts move the data files
+
+```mermaid
+---
+title: Data files, from the research repo to the running app
+---
+flowchart LR
+  NLA[("nla research repo<br/>results/data")]
+  EXP["scripts/export_sample.py<br/>run once when data changes"]
+  MAN[("data/sample/<br/>manifest.json + images, committed")]
+  SCAN["backend/app/services/scan.py<br/>runs in the Pages workflow and dev.sh"]
+  PUB[("frontend/public/data/<br/>copied into the web build")]
+  IDX["backend indexer.py<br/>runs at API startup"]
+  DB[("SQLite<br/>data/db/app.db")]
+  NLA -- "reads regions, read-outs, verdicts" --> EXP
+  EXP -- "writes" --> MAN
+  MAN -- "validated and copied" --> SCAN
+  SCAN --> PUB
+  MAN -- "loaded" --> IDX
+  IDX --> DB
+```
+
+### 6. One request: asking the model about a drawn region
 
 ```mermaid
 ---
@@ -194,7 +301,7 @@ sequenceDiagram
   W-->>U: answer shown under the region
 ```
 
-### 4. Data: what is stored
+### 7. Data: what is stored
 
 The same three shapes appear in `manifest.json`, in the SQLite tables, and in the TypeScript types.
 
