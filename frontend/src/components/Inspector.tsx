@@ -2,7 +2,6 @@ import { useRef, useState } from "react";
 import { useDataSource } from "../api/source";
 import { useImportAnnotations } from "../api/hooks";
 import { MentionTags } from "../features/annotate/MentionTags";
-import type { Tool } from "../stores/viewerStore";
 import type { Annotation, AnnotationCreate, Arm, ConditionKey, Dataset, Sample, Verdict } from "../types/api";
 
 interface Props {
@@ -12,12 +11,9 @@ interface Props {
   annotations: Annotation[];
   onCreate(a: AnnotationCreate): void;
   onDelete(id: string): void;
-  tool: Tool;
-  setTool(t: Tool): void;
   draftLabel: string;
   setDraftLabel(s: string): void;
   showRegion: boolean;
-  toggleRegion(): void;
 }
 
 /** HW1 shows one arm: the released verbalizer with nothing trained. The other arms stay in the data for later homeworks. */
@@ -34,15 +30,16 @@ function Badge({ v }: { v: Verdict | null | undefined }) {
   );
 }
 
-function describeGeometry(a: Annotation): string {
+function describeGeometry(a: Annotation, size: number[] | null): string {
   const g = a.geometry;
-  if (g.type === "bbox") return `box ${(g.w * 100).toFixed(0)}×${(g.h * 100).toFixed(0)}% at (${(g.x * 100).toFixed(0)}, ${(g.y * 100).toFixed(0)})`;
-  if (g.type === "point") return `point (${(g.x * 100).toFixed(0)}, ${(g.y * 100).toFixed(0)})`;
-  return "verdict";
+  const [w, h] = size ?? [1, 1];
+  if (g.type === "bbox") return `x ${Math.round(g.x * w)}, y ${Math.round(g.y * h)}, ${Math.round(g.w * w)}×${Math.round(g.h * h)} px`;
+  if (g.type === "point") return `x ${Math.round(g.x * w)}, y ${Math.round(g.y * h)} px`;
+  return "verdict on the default region's read-out";
 }
 
 export function Inspector(p: Props) {
-  const { sample, dataset, condition, annotations } = p;
+  const { sample, dataset, condition, annotations, showRegion } = p;
   const src = useDataSource();
   const importMut = useImportAnnotations();
   const fileRef = useRef<HTMLInputElement>(null);
@@ -52,6 +49,8 @@ export function Inspector(p: Props) {
   const arm = primaryArm(dataset);
   const text = arm ? sample.readouts[arm.key]?.[condition] : undefined;
   const verdict = arm ? sample.judge[arm.key]?.[condition]?.orig : undefined;
+  const regions = annotations.filter((a) => a.geometry.type !== "tag");
+  const tags = annotations.filter((a) => a.geometry.type === "tag");
 
   const exportJson = async () => {
     const all = await src.exportAnnotations();
@@ -76,64 +75,26 @@ export function Inspector(p: Props) {
   return (
     <aside className="inspector">
       <section>
-        <h2>Region</h2>
-        <p className="phrase">“{sample.phrase}”</p>
+        <h2>Image</h2>
         <dl className="kv">
-          <dt>Head noun</dt>
-          <dd>{sample.head}</dd>
-          <dt>Box (px)</dt>
-          <dd>
-            x {sample.box[0]}, y {sample.box[1]}, {sample.box[2]}×{sample.box[3]}
-          </dd>
-          <dt>Image</dt>
-          <dd>
-            Visual Genome {sample.image_id} · {sample.image_size?.join("×")}
-          </dd>
+          <dt>Source</dt>
+          <dd>Visual Genome {sample.image_id}</dd>
+          <dt>Size</dt>
+          <dd>{sample.image_size?.join(" × ")} px</dd>
         </dl>
-        <label className="check">
-          <input type="checkbox" id="show-region" checked={p.showRegion} onChange={p.toggleRegion} /> Show region box
-        </label>
       </section>
 
       <section>
-        <h2>Read-out</h2>
-        {arm && (
-          <article className="readout" style={{ ["--arm" as string]: arm.colour }}>
-            <header>
-              <span className="swatch" />
-              <strong>{arm.label}</strong>
-              <span className="badges">
-                <Badge v={verdict} />
-              </span>
-            </header>
-            {text ? <p className="text">{text}</p> : <p className="muted">No read-out for this region.</p>}
-            <MentionTags sampleId={sample.id} arm={arm.key} condition={condition} annotations={annotations} onCreate={p.onCreate} onDelete={p.onDelete} />
-          </article>
-        )}
-        {arm?.note && <p className="muted small">{arm.note}.</p>}
-      </section>
-
-      <section>
-        <h2>Annotations</h2>
-        <div className="toolrow">
-          <div className="seg" role="group" aria-label="Tool">
-            <button type="button" className={p.tool === "box" ? "on" : ""} onClick={() => p.setTool("box")} title="Drag on the image to draw a box (b)">
-              Draw box
-            </button>
-            <button type="button" className={p.tool === "select" ? "on" : ""} onClick={() => p.setTool("select")} title="Drag to pan, wheel to zoom (esc)">
-              Pan
-            </button>
-          </div>
-          <input id="draft-label" type="text" placeholder={`Label (default: ${sample.head || "region"})`} value={p.draftLabel} onChange={(e) => p.setDraftLabel(e.target.value)} />
-        </div>
+        <h2>Your regions</h2>
+        <input id="draft-label" type="text" placeholder="Label for the next region you draw" value={p.draftLabel} onChange={(e) => p.setDraftLabel(e.target.value)} />
         <ul className="annlist">
-          {annotations.length === 0 && <li className="muted">None yet. Drag on the image to draw a box.</li>}
-          {annotations.map((a) => (
+          {regions.length === 0 && <li className="muted">None yet. Drag on the image to draw one.</li>}
+          {regions.map((a) => (
             <li key={a.id}>
-              <span className={`kind ${a.geometry.type}`}>{a.geometry.type === "tag" ? "verdict" : a.geometry.type}</span>
+              <span className={`kind ${a.geometry.type}`}>{a.geometry.type}</span>
               <span className="lbl">
                 {a.label}
-                <small>{describeGeometry(a)}</small>
+                <small>{describeGeometry(a, sample.image_size)}</small>
               </span>
               <button type="button" className="del" onClick={() => p.onDelete(a.id)} title="Delete">
                 ×
@@ -141,6 +102,44 @@ export function Inspector(p: Props) {
             </li>
           ))}
         </ul>
+        <p className="muted small">The verbalizer's read-out for a region you draw yourself arrives in a later homework.</p>
+      </section>
+
+      <section>
+        <h2>Default region</h2>
+        {!showRegion ? (
+          <p className="muted">Click <strong>Default region</strong> above the image to reveal the region this dataset defined, and the read-out the verbalizer produced for it.</p>
+        ) : (
+          <>
+            <p className="phrase">“{sample.phrase}”</p>
+            <dl className="kv">
+              <dt>Head noun</dt>
+              <dd>{sample.head}</dd>
+              <dt>Box (px)</dt>
+              <dd>
+                x {sample.box[0]}, y {sample.box[1]}, {sample.box[2]}×{sample.box[3]}
+              </dd>
+            </dl>
+            {arm && (
+              <article className="readout" style={{ ["--arm" as string]: arm.colour }}>
+                <header>
+                  <span className="swatch" />
+                  <strong>{arm.label}</strong>
+                  <span className="badges">
+                    <Badge v={verdict} />
+                  </span>
+                </header>
+                {text ? <p className="text">{text}</p> : <p className="muted">No read-out for this region.</p>}
+                <MentionTags sampleId={sample.id} arm={arm.key} condition={condition} annotations={tags} onCreate={p.onCreate} onDelete={p.onDelete} />
+              </article>
+            )}
+            {arm?.note && <p className="muted small">{arm.note}.</p>}
+          </>
+        )}
+      </section>
+
+      <section>
+        <h2>Save</h2>
         <div className="io">
           <button type="button" onClick={exportJson}>
             Export JSON

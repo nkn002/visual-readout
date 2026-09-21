@@ -8,9 +8,9 @@ Live: **https://nkn002.github.io/visual-readout/** · Course: DS7400 Deep Learni
 
 The research project maps Qwen2.5-VL region activations into a frozen text verbalizer (a natural language autoencoder) through a small trained connector. For each Visual Genome region the viewer shows:
 
-- the image with the region box drawn on it, with zoom and pan;
-- the frozen verbalizer's read-out for that region, with an LLM judge's verdict on whether it names the object;
-- a way to draw your own boxes and record your own verdict.
+- the plain image, with zoom and pan, on which you draw your own region;
+- a **Default region** button that reveals the region the dataset defined for that image, together with the frozen verbalizer's read-out for it and an LLM judge's verdict on whether the read-out names the object;
+- your own names-it / misses-it verdict on that read-out.
 
 HW1 keeps the interface to that. The data file also carries four edited conditions of each image (content swap, context swap, box blank) and four trained connector arms, which later homeworks will surface.
 
@@ -42,9 +42,10 @@ Tests: `cd backend && .venv/bin/python -m pytest` (8 tests: indexing, endpoints,
 
 | Feature | Where |
 |---|---|
-| Region list with thumbnails and text filter, arrow-key navigation | `frontend/src/components/SampleList.tsx` |
-| Image viewer with zoom, pan, region box overlay | `frontend/src/features/viewer/RegionViewer.tsx` |
-| Frozen-arm read-out with the judge's verdict | `frontend/src/components/Inspector.tsx` |
+| Image list with thumbnails, arrow-key navigation | `frontend/src/components/SampleList.tsx` |
+| Image viewer with zoom, pan, and the box overlay | `frontend/src/features/viewer/RegionViewer.tsx` |
+| Default region toggle and drawing tool | `frontend/src/components/StageBar.tsx` |
+| Your regions, the default region's read-out with the judge's verdict | `frontend/src/components/Inspector.tsx` |
 | **Annotation:** drag to draw labelled boxes on the image (default tool), give your own names-it / misses-it verdict on the read-out, delete, export and import JSON | `features/annotate/BoxTool.tsx`, `MentionTags.tsx` |
 | **Backend:** FastAPI + SQLModel + SQLite; datasets, samples, file serving, annotations CRUD, bulk import | `backend/app/` |
 | Two data modes behind one interface: static manifest + localStorage, or the API | `frontend/src/api/` |
@@ -64,7 +65,7 @@ visual-readout/
 │       ├── stores/              zustand: viewer state; settings (mode, backend URL, persisted)
 │       ├── features/viewer/     ViewerProps contract, registry (kind -> component), RegionViewer
 │       ├── features/annotate/   BoxTool (drag to draw), MentionTags (yes/no verdict)
-│       └── components/          Header, SampleList, Inspector, SettingsPanel
+│       └── components/          Header, SampleList, StageBar, Inspector, SettingsPanel
 ├── backend/
 │   └── app/
 │       ├── main.py              app factory, CORS, lifespan (create tables, index the manifest)

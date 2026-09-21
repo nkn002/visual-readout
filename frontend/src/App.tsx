@@ -1,9 +1,10 @@
-import { useEffect, useState } from "react";
+import { useEffect } from "react";
 import { useAnnotations, useCreateAnnotation, useDatasets, useDeleteAnnotation, useSamples } from "./api/hooks";
 import { Header } from "./components/Header";
 import { Inspector } from "./components/Inspector";
 import { SampleList } from "./components/SampleList";
 import { SettingsPanel } from "./components/SettingsPanel";
+import { StageBar } from "./components/StageBar";
 import { viewers } from "./features/viewer/registry";
 import { useSettings } from "./stores/settingsStore";
 import { useViewer } from "./stores/viewerStore";
@@ -13,10 +14,9 @@ import type { ConditionKey } from "./types/api";
 const CONDITION: ConditionKey = "orig";
 
 export default function App() {
-  const [q, setQ] = useState("");
   const datasets = useDatasets();
   const dataset = datasets.data?.[0];
-  const samples = useSamples(dataset?.id, q);
+  const samples = useSamples(dataset?.id, "");
   const v = useViewer();
   const setMode = useSettings((s) => s.setMode);
   const mode = useSettings((s) => s.mode);
@@ -26,6 +26,8 @@ export default function App() {
   useEffect(() => {
     if (list && list.length && !list.some((s) => s.id === v.selectedId)) v.select(list[0].id);
   }, [list, v.selectedId, v.select]);
+  // Every image starts plain: the dataset's own region is only shown on request.
+  useEffect(() => v.setShowRegion(false), [v.selectedId, v.setShowRegion]);
 
   const annotations = useAnnotations(sample?.id);
   const create = useCreateAnnotation();
@@ -70,8 +72,9 @@ export default function App() {
         )}
       </div>
       <main className="panes">
-        <SampleList samples={list} loading={samples.isPending} selectedId={v.selectedId} onSelect={v.select} q={q} onQuery={setQ} />
+        <SampleList samples={list} loading={samples.isPending} selectedId={v.selectedId} onSelect={v.select} />
         <section className="stage" aria-label="Viewer">
+          <StageBar tool={v.tool} setTool={v.setTool} showRegion={v.showRegion} toggleRegion={v.toggleRegion} hasRegion={!!sample} />
           {sample && dataset ? (
             <Viewer
               sample={sample}
@@ -94,12 +97,9 @@ export default function App() {
           annotations={annotations.data ?? []}
           onCreate={(a) => create.mutate(a)}
           onDelete={(id) => remove.mutate(id)}
-          tool={v.tool}
-          setTool={v.setTool}
           draftLabel={v.draftLabel}
           setDraftLabel={v.setDraftLabel}
           showRegion={v.showRegion}
-          toggleRegion={v.toggleRegion}
         />
       </main>
       <SettingsPanel />

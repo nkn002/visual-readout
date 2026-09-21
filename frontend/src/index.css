@@ -98,7 +98,13 @@ kbd { font: 11px ui-monospace, monospace; border: 1px solid var(--line); border-
 .hint { margin: 0; padding: 8px 12px; font-size: 11px; color: var(--muted); border-top: 1px solid var(--line); }
 
 /* stage */
-.stage { display: flex; flex-direction: column; min-width: 0; min-height: 0; padding-top: 8px; }
+.stage { display: flex; flex-direction: column; min-width: 0; min-height: 0; }
+.stagebar { display: flex; align-items: center; gap: 10px; padding: 8px 12px; border-bottom: 1px solid var(--line); background: var(--surface); }
+.stagebar .toggle { border: 1px solid var(--line); background: var(--bg); border-radius: 999px; padding: 4px 12px; font-size: 13px; }
+.stagebar .toggle.on { background: var(--region); border-color: var(--region); color: #fff; }
+.stagebar .toggle:disabled { opacity: 0.4; cursor: default; }
+.listhead { margin: 0; padding: 10px 12px; font-size: 12px; letter-spacing: 0.07em; text-transform: uppercase; color: var(--muted); border-bottom: 1px solid var(--line); }
+.inspector > section > input { width: 100%; padding: 5px 8px; border: 1px solid var(--line); border-radius: 4px; background: var(--bg); margin-bottom: 6px; }
 .tabs { display: flex; flex-wrap: wrap; gap: 6px; padding: 8px 12px; border-bottom: 1px solid var(--line); background: var(--surface); }
 .tabs button { border: 1px solid var(--line); background: var(--bg); border-radius: 999px; padding: 4px 12px; font-size: 13px; }
 .tabs button.on { background: var(--accent); border-color: var(--accent); color: #fff; }
