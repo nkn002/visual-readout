@@ -11,6 +11,8 @@ dependencies = [
   "fastapi[standard]>=0.115",
   "sqlmodel>=0.0.22",
   "pydantic-settings>=2.4",
+  "anthropic>=1.0",
+  "pillow>=10",
 ]
 
 [project.optional-dependencies]

@@ -10,7 +10,8 @@ The research project maps Qwen2.5-VL region activations into a frozen text verba
 
 - the plain image, with zoom and pan, on which you draw your own region;
 - a **Default region** button that reveals the region the dataset defined for that image, together with the frozen verbalizer's read-out for it and an LLM judge's verdict on whether the read-out names the object;
-- your own names-it / misses-it verdict on that read-out.
+- your own names-it / misses-it verdict on that read-out;
+- an **Ask Qwen2.5-VL** button on each region you draw: the backend sends the photo with the box outlined and the enlarged crop to Qwen2.5-VL-7B-Instruct, the same vision-language model the research reads activations from, and shows its answer.
 
 HW1 keeps the interface to that. The data file also carries four edited conditions of each image (content swap, context swap, box blank) and four trained connector arms, which later homeworks will surface.
 
@@ -36,7 +37,16 @@ Then in the app open **Settings** (the pill in the top bar), choose **Backend**,
 
 Docker (both services, hot reload): `docker compose up`, then open http://localhost:5173.
 
-Tests: `cd backend && .venv/bin/python -m pytest` (8 tests: indexing, endpoints, annotation round trip, import, manifest validation).
+Ask the model (needs a GPU; on the UVA cluster):
+
+```bash
+sbatch scripts/model_server.sbatch        # Qwen2.5-VL-7B-Instruct on an RTX 3090, about 2 minutes to load
+tail -f data/db/model_server.<jobid>.log  # "serving http://<node>:8100" when ready
+```
+
+The server writes its URL to `data/db/model_server.url`; the backend reads that file per request, so nothing needs restarting. The Settings panel's **Check connection** reports whether the model is reachable. Without it the button answers with a clear "not running" message.
+
+Tests: `cd backend && .venv/bin/python -m pytest` (11 tests: indexing, endpoints, annotation round trip, import, manifest validation, describe with a fake model server).
 
 ## Features
 
@@ -48,10 +58,11 @@ Tests: `cd backend && .venv/bin/python -m pytest` (8 tests: indexing, endpoints,
 | Your regions, the default region's read-out with the judge's verdict | `frontend/src/components/Inspector.tsx` |
 | **Annotation:** drag to draw labelled boxes on the image (default tool), give your own names-it / misses-it verdict on the read-out, delete, export and import JSON | `features/annotate/BoxTool.tsx`, `MentionTags.tsx` |
 | **Backend:** FastAPI + SQLModel + SQLite; datasets, samples, file serving, annotations CRUD, bulk import | `backend/app/` |
+| **Ask Qwen2.5-VL:** `POST /api/samples/{id}/describe` crops the box, calls the model server, stores the answer as a `model` annotation | `backend/app/services/describe.py`, `scripts/model_server.py` |
 | Two data modes behind one interface: static manifest + localStorage, or the API | `frontend/src/api/` |
 | GitHub Pages deploy on every push to `main` | `.github/workflows/pages.yml` |
 
-Implemented annotation: **yes**. Implemented backend/database: **yes** (SQLite via SQLModel; the schema is created at startup, migrations are a follow-up).
+Implemented annotation: **yes**. Implemented backend/database: **yes** (SQLite via SQLModel; the schema is created at startup, migrations are a follow-up). Model in the loop: **yes**, Qwen2.5-VL-7B-Instruct on a cluster GPU, prompted directly.
 
 ## How it is put together
 
@@ -59,6 +70,7 @@ Implemented annotation: **yes**. Implemented backend/database: **yes** (SQLite v
 visual-readout/
 ├── data/sample/                 manifest.json + images/, committed, shipped to Pages
 ├── scripts/export_sample.py     builds data/sample from the research repo (needs NLA_ROOT)
+├── scripts/model_server.py      Qwen2.5-VL-7B behind a small HTTP API; model_server.sbatch runs it on a GPU
 ├── frontend/                    React 19 + Vite + TypeScript
 │   └── src/
 │       ├── api/                 DataSource interface; staticSource (manifest + localStorage); apiSource (fetch)
@@ -71,15 +83,15 @@ visual-readout/
 │       ├── main.py              app factory, CORS, lifespan (create tables, index the manifest)
 │       ├── config.py            DATA_DIR, DATABASE_URL, CORS_ORIGINS from .env
 │       ├── models.py            Dataset, Sample, Annotation (SQLModel)
-│       ├── routers/             health, datasets, samples, annotations
-│       └── services/            scan.py (validate + stage manifest, stdlib), indexer.py (manifest -> SQLite)
+│       ├── routers/             health, datasets, samples, annotations, describe
+│       └── services/            scan.py (manifest), indexer.py (manifest -> SQLite), describe.py (crop + model call)
 ├── compose.yml                  frontend + backend with hot reload
 └── .github/workflows/           pages.yml (deploy), test.yml (pytest + build)
 ```
 
 Data flow: `export_sample.py` writes `data/sample/manifest.json`. In static mode the Pages build copies it into the bundle and the browser reads it. In backend mode `indexer.py` loads the same file into SQLite and the API serves it. The screens do not know which one answered.
 
-Annotations are rows `{id, sample_id, label, geometry, source, created_at}`. `geometry` is JSON: `{"type": "bbox", x, y, w, h}` in normalised image coordinates, `{"type": "point", x, y}`, or `{"type": "tag", arm, condition, value}`. IDs are UUIDs made in the browser, so a JSON export from static mode imports into the database without collisions.
+Annotations are rows `{id, sample_id, label, note, geometry, source, created_at}`; a model answer is a row with `source = "model"`, the label in `label` and the sentence in `note`. `geometry` is JSON: `{"type": "bbox", x, y, w, h}` in normalised image coordinates, `{"type": "point", x, y}`, or `{"type": "tag", arm, condition, value}`. IDs are UUIDs made in the browser, so a JSON export from static mode imports into the database without collisions.
 
 ## Libraries
 

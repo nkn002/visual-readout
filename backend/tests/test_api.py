@@ -89,3 +89,32 @@ def test_stage_copies_manifest_and_images(tmp_path):
     out = scan.stage(get_settings().data_path, tmp_path / "out")
     assert (out / "manifest.json").exists()
     assert len(list((out / "images").glob("*.jpg"))) == 48
+
+
+def test_render_inputs_and_parse(tmp_path):
+    from app.services.describe import parse_answer, render_inputs
+
+    marked, crop = render_inputs("../data/sample/images/00_orig.jpg", {"x": 0.166, "y": 0.395, "w": 0.754, "h": 0.245})
+    assert len(marked) > 5000 and len(crop) > 5000
+    assert parse_answer("Label: a watermark\nDescription: Grey text across the photo.") == ("a watermark", "Grey text across the photo.")
+    assert parse_answer("**Label:** Two cats.\n**Description:** They sit.") == ("Two cats", "They sit.")
+    assert parse_answer("just a sentence") == ("just a sentence", "just a sentence")
+
+
+def test_describe_without_model_server(client):
+    r = client.post("/api/samples/cf-00/describe", json={"geometry": {"type": "bbox", "x": 0.1, "y": 0.1, "w": 0.3, "h": 0.3}})
+    assert r.status_code in (503,), r.text
+    assert client.post("/api/samples/cf-00/describe", json={"geometry": {"type": "point", "x": 0.1, "y": 0.1}}).status_code == 422
+
+
+def test_describe_with_fake_model_server(client, monkeypatch):
+    from app.services import describe as svc
+
+    monkeypatch.setattr(svc, "model_url", lambda settings: "http://fake:1")
+    monkeypatch.setattr(svc, "describe_region", lambda path, box, url: svc.Described("a bottle", "A glass bottle on the table.", "fake", "raw"))
+    r = client.post("/api/samples/cf-00/describe", json={"geometry": {"type": "bbox", "x": 0.1, "y": 0.1, "w": 0.3, "h": 0.3}})
+    assert r.status_code == 200, r.text
+    body = r.json()
+    assert body["label"] == "a bottle" and body["annotation"]["source"] == "model" and body["annotation"]["note"].startswith("A glass")
+    ids = {a["id"] for a in client.get("/api/samples/cf-00/annotations").json()}
+    assert body["annotation"]["id"] in ids

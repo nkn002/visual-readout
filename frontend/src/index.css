@@ -187,3 +187,12 @@ details summary { cursor: pointer; color: var(--muted); font-size: 13px; }
 @media (prefers-reduced-motion: no-preference) {
   .samples li button, .tabs button { transition: background 0.12s; }
 }
+
+.annlist li.region { display: block; }
+.annlist li.region .row { display: flex; align-items: center; gap: 8px; }
+.annlist .ask { border: 1px solid var(--line); background: var(--bg); border-radius: 999px; padding: 2px 10px; font-size: 12px; white-space: nowrap; }
+.annlist .ask:disabled { opacity: 0.6; cursor: wait; }
+.answer { display: flex; align-items: flex-start; gap: 8px; margin: 6px 0 4px 8px; padding: 6px 10px; border-left: 3px solid var(--model); background: var(--bg); border-radius: 0 6px 6px 0; font-size: 13px; }
+.answer .swatch.model { background: var(--model); margin-top: 5px; }
+.answer span:nth-child(2) { flex: 1; }
+.err { color: var(--no); margin: 4px 0 0; }

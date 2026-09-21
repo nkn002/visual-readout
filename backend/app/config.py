@@ -15,6 +15,11 @@ class Settings(BaseSettings):
     data_dir: Path = REPO_ROOT / "data" / "sample"
     database_url: str = f"sqlite:///{REPO_ROOT / 'data' / 'db' / 'app.db'}"
     cors_origins: str = "http://localhost:5173,https://nkn002.github.io"
+    # Qwen2.5-VL model server (scripts/model_server.py on a GPU node). If unset, the URL file the
+    # server writes at startup (data/db/model_server.url) is read at request time.
+    model_url: str | None = None
+    anthropic_api_key: str | None = None  # falls back to the SDK's own resolution (env, ant auth profile)
+    describe_model: str = "claude-opus-5"
 
     @property
     def data_path(self) -> Path:
@@ -29,6 +34,10 @@ class Settings(BaseSettings):
         if self.database_url.startswith(prefix) and not self.database_url.startswith(prefix + "/"):
             return prefix + str((REPO_ROOT / self.database_url[len(prefix):]).resolve())
         return self.database_url
+
+    @property
+    def model_url_file(self) -> Path:
+        return REPO_ROOT / "data" / "db" / "model_server.url"
 
     @property
     def origins(self) -> list[str]:

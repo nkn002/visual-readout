@@ -31,7 +31,7 @@ def create_annotation(sample: SampleDep, body: AnnotationCreate, session: Sessio
     ann_id = body.id or str(uuid4())
     if session.get(Annotation, ann_id) is not None:
         raise HTTPException(409, f"annotation {ann_id!r} already exists")
-    row = Annotation(id=ann_id, sample_id=sample.id, label=body.label, geometry=body.geometry, source=body.source,
+    row = Annotation(id=ann_id, sample_id=sample.id, label=body.label, note=body.note, geometry=body.geometry, source=body.source,
                      **({"created_at": body.created_at} if body.created_at else {}))
     session.add(row)
     session.commit()
@@ -57,7 +57,7 @@ def import_annotations(body: list[AnnotationCreate], session: SessionDep) -> Imp
         if not a.id or session.get(Annotation, a.id) is not None or session.get(Sample, a.sample_id) is None:
             skipped += 1
             continue
-        session.add(Annotation(id=a.id, sample_id=a.sample_id, label=a.label, geometry=a.geometry, source=a.source,
+        session.add(Annotation(id=a.id, sample_id=a.sample_id, label=a.label, note=a.note, geometry=a.geometry, source=a.source,
                                **({"created_at": a.created_at} if a.created_at else {})))
         imported += 1
     session.commit()

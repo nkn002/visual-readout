@@ -1,8 +1,8 @@
 import { useRef, useState } from "react";
 import { useDataSource } from "../api/source";
-import { useImportAnnotations } from "../api/hooks";
+import { useDescribeRegion, useImportAnnotations } from "../api/hooks";
 import { MentionTags } from "../features/annotate/MentionTags";
-import type { Annotation, AnnotationCreate, Arm, ConditionKey, Dataset, Sample, Verdict } from "../types/api";
+import type { Annotation, AnnotationCreate, Arm, ConditionKey, Dataset, Geometry, Sample, Verdict } from "../types/api";
 
 interface Props {
   sample: Sample | null;
@@ -42,15 +42,32 @@ export function Inspector(p: Props) {
   const { sample, dataset, condition, annotations, showRegion } = p;
   const src = useDataSource();
   const importMut = useImportAnnotations();
+  const describe = useDescribeRegion(sample?.id);
   const fileRef = useRef<HTMLInputElement>(null);
   const [status, setStatus] = useState<string>("");
+  const [asking, setAsking] = useState<string | null>(null);
+  const [askError, setAskError] = useState<{ id: string; message: string } | null>(null);
 
   if (!sample || !dataset) return <aside className="inspector" />;
   const arm = primaryArm(dataset);
   const text = arm ? sample.readouts[arm.key]?.[condition] : undefined;
   const verdict = arm ? sample.judge[arm.key]?.[condition]?.orig : undefined;
-  const regions = annotations.filter((a) => a.geometry.type !== "tag");
+  const regions = annotations.filter((a) => a.geometry.type !== "tag" && a.source === "human");
   const tags = annotations.filter((a) => a.geometry.type === "tag");
+  const sameBox = (a: Geometry, b: Geometry) =>
+    a.type === "bbox" && b.type === "bbox" && ["x", "y", "w", "h"].every((k) => Math.abs((a as never as Record<string, number>)[k] - (b as never as Record<string, number>)[k]) < 1e-6);
+  const answersFor = (r: Annotation) => annotations.filter((a) => a.source === "model" && sameBox(a.geometry, r.geometry));
+  const ask = async (r: Annotation) => {
+    setAsking(r.id);
+    setAskError(null);
+    try {
+      await describe.mutateAsync(r.geometry);
+    } catch (e) {
+      setAskError({ id: r.id, message: (e as Error).message });
+    } finally {
+      setAsking(null);
+    }
+  };
 
   const exportJson = async () => {
     const all = await src.exportAnnotations();
@@ -90,19 +107,37 @@ export function Inspector(p: Props) {
         <ul className="annlist">
           {regions.length === 0 && <li className="muted">None yet. Drag on the image to draw one.</li>}
           {regions.map((a) => (
-            <li key={a.id}>
-              <span className={`kind ${a.geometry.type}`}>{a.geometry.type}</span>
-              <span className="lbl">
-                {a.label}
-                <small>{describeGeometry(a, sample.image_size)}</small>
-              </span>
-              <button type="button" className="del" onClick={() => p.onDelete(a.id)} title="Delete">
-                ×
-              </button>
+            <li key={a.id} className="region">
+              <div className="row">
+                <span className={`kind ${a.geometry.type}`}>{a.geometry.type}</span>
+                <span className="lbl">
+                  {a.label}
+                  <small>{describeGeometry(a, sample.image_size)}</small>
+                </span>
+                <button type="button" className="ask" disabled={asking !== null} onClick={() => void ask(a)} title="Send this region to Qwen2.5-VL and ask what it is">
+                  {asking === a.id ? "Asking…" : "Ask Qwen2.5-VL"}
+                </button>
+                <button type="button" className="del" onClick={() => p.onDelete(a.id)} title="Delete">
+                  ×
+                </button>
+              </div>
+              {askError?.id === a.id && <p className="err small">{askError.message}</p>}
+              {answersFor(a).map((m) => (
+                <div key={m.id} className="answer">
+                  <span className="swatch model" />
+                  <span>
+                    <strong>{m.label}</strong>
+                    {m.note && <> — {m.note}</>}
+                  </span>
+                  <button type="button" className="del" onClick={() => p.onDelete(m.id)} title="Delete this answer">
+                    ×
+                  </button>
+                </div>
+              ))}
             </li>
           ))}
         </ul>
-        <p className="muted small">The verbalizer's read-out for a region you draw yourself arrives in a later homework.</p>
+        <p className="muted small">Ask Qwen2.5-VL, the same vision-language model the research reads activations from, what a region you drew contains. It answers from the image directly.</p>
       </section>
 
       <section>

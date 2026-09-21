@@ -51,6 +51,7 @@ export interface Annotation {
   id: string;
   sample_id: string;
   label: string;
+  note?: string;
   geometry: Geometry;
   source: AnnotationSource;
   created_at: string;
@@ -60,10 +61,20 @@ export interface AnnotationCreate {
   id?: string;
   sample_id: string;
   label: string;
+  note?: string;
   geometry: Geometry;
   source?: AnnotationSource;
   created_at?: string;
 }
 
-export interface Health { status: string; datasets: number; samples: number; data_dir: string }
+export interface Health {
+  status: string;
+  datasets: number;
+  samples: number;
+  data_dir: string;
+  model_url?: string | null;
+  model_ready?: boolean;
+  model_name?: string | null;
+}
+export interface DescribeResult { label: string; description: string; model: string; annotation: Annotation }
 export interface Page { offset: number; limit: number; q?: string }

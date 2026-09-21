@@ -1,5 +1,5 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import type { Annotation, AnnotationCreate } from "../types/api";
+import type { Annotation, AnnotationCreate, Geometry } from "../types/api";
 import { useDataSource, useSourceKey } from "./source";
 
 export function useDatasets() {
@@ -57,5 +57,15 @@ export function useImportAnnotations() {
   return useMutation({
     mutationFn: (list: Annotation[]) => src.importAnnotations(list),
     onSuccess: () => qc.invalidateQueries({ queryKey: ["annotations", key] }),
+  });
+}
+
+export function useDescribeRegion(sampleId: string | undefined) {
+  const src = useDataSource();
+  const key = useSourceKey();
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (geometry: Geometry) => src.describeRegion(sampleId!, geometry),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["annotations", key, sampleId] }),
   });
 }

@@ -15,7 +15,8 @@ export function SettingsPanel() {
     setResult("Checking…");
     try {
       const h = await new ApiSource(draft.trim().replace(/\/+$/, "")).health();
-      setResult(`Connected: ${h.datasets} dataset(s), ${h.samples} samples, data at ${h.data_dir}`);
+      const m = h.model_ready ? `Qwen2.5-VL ready at ${h.model_url}` : h.model_url ? `model server at ${h.model_url} not answering` : "model server not running (sbatch scripts/model_server.sbatch)";
+      setResult(`Connected: ${h.datasets} dataset(s), ${h.samples} samples. ${m}.`);
     } catch (e) {
       setResult(`Failed: ${(e as Error).message}`);
     }

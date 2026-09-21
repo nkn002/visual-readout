@@ -36,6 +36,7 @@ class Annotation(SQLModel, table=True):
     id: str = Field(primary_key=True)
     sample_id: str = Field(foreign_key="sample.id", index=True)
     label: str = ""
+    note: str = ""  # free text, e.g. the model's one-sentence description
     geometry: dict[str, Any] = Field(default_factory=dict, sa_column=Column(JSON))
     source: str = "human"
     created_at: datetime = Field(default_factory=utcnow)

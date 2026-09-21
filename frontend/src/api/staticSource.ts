@@ -1,4 +1,4 @@
-import type { Annotation, AnnotationCreate, ConditionKey, Dataset, Manifest, Page, Sample } from "../types/api";
+import type { Annotation, AnnotationCreate, ConditionKey, Dataset, Geometry, Manifest, Page, Sample } from "../types/api";
 import type { DataSource } from "./source";
 import { newId } from "./source";
 
@@ -73,6 +73,9 @@ export const staticSource: DataSource = {
   },
   async exportAnnotations(): Promise<Annotation[]> {
     return readAll();
+  },
+  async describeRegion(_sampleId: string, _geometry: Geometry): Promise<Annotation> {
+    throw new Error("Asking the model needs the backend. Open Settings and switch to Backend.");
   },
   async importAnnotations(list: Annotation[]): Promise<number> {
     const have = new Set(readAll().map((a) => a.id));

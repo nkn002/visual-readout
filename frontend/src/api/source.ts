@@ -1,5 +1,5 @@
 import { useMemo } from "react";
-import type { Annotation, AnnotationCreate, ConditionKey, Dataset, Page, Sample } from "../types/api";
+import type { Annotation, AnnotationCreate, ConditionKey, Dataset, Geometry, Page, Sample } from "../types/api";
 import { useSettings } from "../stores/settingsStore";
 import { staticSource } from "./staticSource";
 import { ApiSource } from "./apiSource";
@@ -16,6 +16,8 @@ export interface DataSource {
   deleteAnnotation(id: string): Promise<void>;
   exportAnnotations(): Promise<Annotation[]>;
   importAnnotations(list: Annotation[]): Promise<number>;
+  /** Ask the vision model what a box contains; the answer comes back as a `model` annotation. */
+  describeRegion(sampleId: string, geometry: Geometry): Promise<Annotation>;
 }
 
 export function useDataSource(): DataSource {
