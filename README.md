@@ -337,12 +337,78 @@ classDiagram
   Sample "1" --> "many" Annotation : has
 ```
 
-## How the parts meet
+## How the frontend and backend talk
 
-Two modes, one interface. On GitHub Pages there is no server, so the page reads `manifest.json` directly and keeps annotations in the browser. With the backend running, the same page saves to SQLite and can ask Qwen. The user switches in Settings; the components do not change.
+The page and the API share one contract: a handful of JSON endpoints. In static mode the page skips them and reads `manifest.json` directly; in backend mode every one of these calls goes over HTTP.
+
+| What the user does | Frontend call (`api/apiSource.ts`) | Request | Backend handler | Response |
+|---|---|---|---|---|
+| Opens the page | `listDatasets()` | `GET /api/datasets` | `routers/datasets.py` | `[{id, name, kind, conditions, arms, n_samples}]` |
+| Sees the image list | `listSamples(datasetId)` | `GET /api/datasets/cf/samples?offset=0&limit=500` | `routers/datasets.py` | `[Sample, ...]`, each exactly one manifest record |
+| Views an image | `fileUrl(sample, "orig")` in an `<img>` tag | `GET /api/samples/cf-01/file?condition=orig` | `routers/samples.py` | the JPEG bytes |
+| Selects an image | `listAnnotations(sampleId)` | `GET /api/samples/cf-01/annotations` | `routers/annotations.py` | `[Annotation, ...]` |
+| Draws a box | `createAnnotation(a)` | `POST /api/samples/cf-01/annotations` with `{sample_id, label, geometry}` | `routers/annotations.py` | the stored `Annotation` (201) |
+| Clicks **Ask Qwen2.5-VL** | `describeRegion(sampleId, geometry)` | `POST /api/samples/cf-01/describe` with `{geometry}` | `routers/describe.py` | `{label, description, model, annotation}` |
+| Deletes an annotation | `deleteAnnotation(id)` | `DELETE /api/annotations/{id}` | `routers/annotations.py` | 204 |
+| Checks the connection in Settings | `health()` | `GET /api/health` | `routers/health.py` | `{status, samples, model_url, model_ready, model_name}` |
+
+The browser reaches the API through the Vite dev proxy in local development (`/api/*` is forwarded to port 8000, so there is no cross-origin request) and directly by URL from the public page, which is why `CORS_ORIGINS` in `.env` lists the Pages origin.
+
+### What happens when the user clicks Ask Qwen2.5-VL
+
+The user has drawn a box on image `cf-01`; it is already stored as a human annotation. Then:
+
+1. **`Inspector.tsx`** calls `ask(region)`, which runs the `useDescribeRegion` mutation from `api/hooks.ts` with the region's geometry: `{"type": "bbox", "x": 0.30, "y": 0.30, "w": 0.40, "h": 0.40}`. Coordinates are fractions of the image, so they do not depend on zoom or screen size. The button shows "Asking…".
+2. **`apiSource.ts`** sends the request:
+   ```http
+   POST /api/samples/cf-01/describe
+   content-type: application/json
+
+   {"geometry": {"type": "bbox", "x": 0.30, "y": 0.30, "w": 0.40, "h": 0.40}}
+   ```
+3. **`routers/describe.py`** receives it. FastAPI resolves the sample from the URL (`dependencies.py`, 404 if unknown) and validates the body against `DescribeRequest` in `schemas.py` (422 if the geometry is not a box). The handler looks up the image file for the `orig` condition from the sample's manifest record and asks `services/describe.py` for the model server's address: `MODEL_URL` from `.env`, else the file `data/db/model_server.url` that the model server wrote when it started. No address means a 503 with the message "the Qwen2.5-VL model server is not running".
+4. **`services/describe.py`**, `render_inputs`, prepares two JPEGs with Pillow: the whole photo with the box outlined in red, and the box cropped with a small margin and enlarged so its short side is at least 320 px. Both are base64-encoded.
+5. **`services/describe.py`**, `describe_region`, posts to the model server on the GPU node:
+   ```http
+   POST http://udc-an28-35:8100/describe
+
+   {"images": ["<base64 jpeg>", "<base64 jpeg>"],
+    "prompt": "The first image is a photo with a red box drawn on it. The second image shows the inside of that box, enlarged. What is inside the red box? Answer in exactly this format: Label: ... Description: ...",
+    "max_new_tokens": 96}
+   ```
+6. **`scripts/model_server.py`** decodes the images, builds a Qwen chat message with two image entries and the prompt, runs `generate` (greedy, no sampling), and replies within a few seconds:
+   ```json
+   {"text": "Label: Bear paws\nDescription: Two brown bear paws are clasped together, one paw slightly raised above the other, against a backdrop of green foliage.",
+    "model": "Qwen/Qwen2.5-VL-7B-Instruct", "seconds": 2.4}
+   ```
+   If the model server cannot be reached the backend answers 503; if it takes longer than 180 s, 504; if it errors, 502 with the message.
+7. **`services/describe.py`**, `parse_answer`, splits the text into the label and the sentence. **`routers/describe.py`** stores a new row through `models.py`: `Annotation(source="model", label="Bear paws", note="Two brown bear paws...", geometry=<the same box>)`, and replies:
+   ```json
+   {"label": "Bear paws", "description": "Two brown bear paws are clasped together, ...",
+    "model": "Qwen/Qwen2.5-VL-7B-Instruct",
+    "annotation": {"id": "…", "sample_id": "cf-01", "label": "Bear paws", "note": "…", "geometry": {"type": "bbox", "x": 0.3, "y": 0.3, "w": 0.4, "h": 0.4}, "source": "model", "created_at": "…"}}
+   ```
+8. **`api/hooks.ts`** marks the annotations query for `cf-01` stale, so TanStack Query refetches `GET /api/samples/cf-01/annotations`. **`Inspector.tsx`** finds the model annotation whose box equals the user's box and renders the label and sentence under that region; **`RegionViewer.tsx`** draws the model's box in purple on the image. On failure, the error message is shown under the region instead.
+
+The same trace in static mode stops at step 2: `staticSource.describeRegion` rejects with "Asking the model needs the backend", because there is no server behind GitHub Pages.
+
+### Two modes, one interface
+
+On GitHub Pages there is no server, so the page reads `manifest.json` directly and keeps annotations in the browser. With the backend running, the same page saves to SQLite and can ask Qwen. The user switches in Settings; the components do not change.
 
 Annotations are rows `{id, sample_id, label, note, geometry, source, created_at}`. `geometry` is JSON: `{"type": "bbox", x, y, w, h}` in normalised image coordinates, `{"type": "point", x, y}`, or `{"type": "tag", arm, condition, value}`. A model answer is a row with `source = "model"`, the short label in `label` and the sentence in `note`. IDs are UUIDs made in the browser, so a JSON export from static mode imports into the database without collisions.
+
+## Why React and not a plain HTML page
+
+An academic page is a document: fixed content, no state. This page has state: the selected image, the active tool, boxes being dragged, annotations that change, two data sources. React splits that into components that re-render when state changes, and TypeScript checks that the data shapes match the backend. The compiled `dist/` is still a plain static site, the same kind of thing as a paper page; only the source is organised as an app.
 
 ## Libraries
 
 Frontend: React 19, Vite 8, TypeScript, TanStack Query (server data), Zustand (UI state), react-zoom-pan-pinch (zoom and pan). Backend: FastAPI, SQLModel (SQLAlchemy + Pydantic), SQLite, pydantic-settings, Pillow, httpx, pytest. Model server: PyTorch, Transformers, Qwen2.5-VL-7B-Instruct.
+## Working on it with an agent
+
+A new data type is a new component registered in `frontend/src/features/viewer/registry.ts` that takes `ViewerProps`. A new annotation shape is a new `Geometry` variant in `frontend/src/types/api.ts`, drawn in `RegionViewer.tsx`. A new endpoint is a router in `backend/app/routers/` included in `main.py`, with a test in `backend/tests/`. A trained model for a later homework loads in `scripts/model_server.py` or in the backend's `lifespan`, and its outputs are stored as annotations with `source = "model"`.
+
+## Roadmap
+
+HW2: a classifier for whether a read-out names the object, trained on the judge verdicts and the user's tags. HW3: predictions drawn as `source = "model"` boxes next to human ones. HW4: region-level edits and read-out comparison at scale.
