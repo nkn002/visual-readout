@@ -63,54 +63,85 @@ Tests: `cd backend && .venv/bin/python -m pytest` (11 tests: indexing, endpoints
 
 ## The repository, top down
 
-The user can do seven things in this app: browse the images, draw a region, ask Qwen2.5-VL what a region is, reveal the dataset's default region and its read-out, give a verdict on that read-out, export or import their annotations, and switch between static and backend mode. Each action below names the frontend files that handle it, the signal sent to the backend, the backend files that answer, and where the result lands.
+The user can do seven things in this app. For each one, this section gives the story in a sentence, then the path through the files, then what changes in static mode.
 
-Two files sit on every path. In the browser, `frontend/src/api/source.ts` decides whether a call goes to `staticSource.ts` (no server: reads `data/manifest.json`, keeps annotations in the browser; this is what GitHub Pages runs) or to `apiSource.ts` (sends JSON to the backend). On the server, `backend/app/main.py` receives every request and passes it to the router that owns the URL. "Backend mode" below means `apiSource.ts` is active.
+Four words used below:
+
+- **Router**: a backend file that owns one URL and answers requests to it (`backend/app/routers/`).
+- **Service**: a backend file that does real work with no HTTP of its own (`backend/app/services/`).
+- **Data source**: the one frontend file that talks to the outside, `frontend/src/api/apiSource.ts`. It sends JSON to the backend.
+- **Static mode**: the public page on GitHub Pages, where there is no backend. `frontend/src/api/staticSource.ts` stands in for the data source: it reads `data/manifest.json` and keeps annotations in the browser.
+
+Paths are written frontend → backend → frontend. Frontend files are under `frontend/src/`, backend files under `backend/app/`.
 
 ### 1. Browse the images
 
-`components/SampleList.tsx` shows one thumbnail per image; `App.tsx` keeps the selected one in `stores/viewerStore.ts`; `features/viewer/RegionViewer.tsx` shows it with zoom and pan.
+The user picks a thumbnail and sees the image, with zoom and pan.
 
-To get the list, `SampleList.tsx` calls `useSamples` in `api/hooks.ts`. In backend mode `apiSource.ts` sends `GET /api/datasets/cf/samples`; `routers/datasets.py` reads the Sample rows through `database.py` and `models.py` (rows that `services/indexer.py` loaded from `data/sample/manifest.json` when `main.py` started) and returns them as JSON. Each `<img>` then asks `GET /api/samples/{id}/file`, which `routers/samples.py` answers with the JPEG bytes. `hooks.ts` caches the list and `SampleList.tsx` renders it. In static mode `staticSource.ts` reads `manifest.json` itself and points the `<img>` tags at the bundled files.
+`SampleList.tsx` asks for the list → `apiSource.ts` sends `GET /api/datasets/cf/samples` → `routers/datasets.py` reads the Sample rows from SQLite and returns them → `SampleList.tsx` shows the thumbnails, `RegionViewer.tsx` shows the chosen image. Each image itself comes from `GET /api/samples/{id}/file`, answered by `routers/samples.py`.
+
+The rows come from `data/sample/manifest.json`; `services/indexer.py` loads them into SQLite when the backend starts.
+
+Static mode: `staticSource.ts` reads `manifest.json` directly and shows the bundled images.
 
 ### 2. Draw a region
 
-`components/StageBar.tsx` sets the tool in `viewerStore.ts`. With the box tool active, `features/annotate/BoxTool.tsx` (inside `RegionViewer.tsx`) turns a drag into a box in normalised image coordinates and hands it to `useCreateAnnotation` in `hooks.ts`, with the label typed in `components/Inspector.tsx`.
+The user drags a box on the image, and it is saved with a label.
 
-In backend mode `apiSource.ts` sends `POST /api/samples/{id}/annotations` with `{label, geometry}`; `routers/annotations.py` checks the body against `schemas.py`, inserts an `Annotation` row with `source = "human"` through `models.py`, and returns the stored row. `hooks.ts` then refreshes `useAnnotations`, so `Inspector.tsx` lists the new region and `RegionViewer.tsx` draws it. Deleting a region goes the same way with `DELETE /api/annotations/{id}`. In static mode `staticSource.ts` writes the row to `localStorage` instead.
+`StageBar.tsx` selects the box tool → `BoxTool.tsx` (inside `RegionViewer.tsx`) turns the drag into a box → `apiSource.ts` sends `POST /api/samples/{id}/annotations` with the box and label → `routers/annotations.py` saves an Annotation row with `source = "human"` and returns it → `Inspector.tsx` lists the region, `RegionViewer.tsx` draws it. Delete uses `DELETE /api/annotations/{id}` on the same router.
+
+Static mode: the box is saved in the browser instead.
 
 ### 3. Ask Qwen2.5-VL what a region is
 
-Under each drawn region, `Inspector.tsx` has an **Ask Qwen2.5-VL** button. Clicking it calls `useDescribeRegion` in `hooks.ts` with that region's box.
+The user clicks **Ask Qwen2.5-VL** under a region. The backend crops the box, sends it to the model, and shows the model's answer under the region.
 
-`apiSource.ts` sends `POST /api/samples/{id}/describe` with `{geometry}`. `routers/describe.py` resolves the sample, finds the image file, and calls `services/describe.py`, which outlines the box in red on the photo, enlarges the crop, and posts both images with a prompt to `scripts/model_server.py`, the Qwen2.5-VL-7B process on a GPU node (its address comes from `config.py` or the file `data/db/model_server.url`). The model server runs the model and returns text in the form "Label: … Description: …". `services/describe.py` parses it; `routers/describe.py` stores it as an `Annotation` with `source = "model"`, the label in `label` and the sentence in `note`, and returns label, description, and the stored row. `hooks.ts` refreshes the annotations, and `Inspector.tsx` shows the answer under the region while `RegionViewer.tsx` draws the model's box in purple. If the model server is not running, `routers/describe.py` answers 503 and `Inspector.tsx` shows that message. In static mode `staticSource.ts` rejects the call with "needs the backend".
+`Inspector.tsx` button → `apiSource.ts` sends `POST /api/samples/{id}/describe` with the box → `routers/describe.py` → `services/describe.py` outlines the box in red on the photo and enlarges the crop → `scripts/model_server.py` (Qwen2.5-VL-7B on a GPU node) runs the model and returns "Label: … Description: …" → `services/describe.py` parses it → `routers/describe.py` saves it as an Annotation with `source = "model"` and returns label and description → `Inspector.tsx` shows the answer under the region, `RegionViewer.tsx` draws the model's box in purple.
+
+If the model server is not running, the router answers 503 and the message appears under the region.
+
+Static mode: not available; the button says it needs the backend.
 
 ### 4. Reveal the default region and its read-out
 
-`StageBar.tsx` toggles `showRegion` in `viewerStore.ts`. Nothing is fetched: the region's box, phrase, and the frozen verbalizer's read-out with the judge's verdict are already inside the sample record that action 1 loaded. `RegionViewer.tsx` draws the box in orange and `Inspector.tsx` shows the phrase, the read-out, and the verdict badge. Switching image resets the toggle.
+The user clicks **Default region**. The dataset's own box appears on the image, with its phrase and the frozen verbalizer's read-out.
+
+No request is sent. The box, phrase, read-out, and judge verdict arrived with the sample in action 1. `StageBar.tsx` flips a switch in `viewerStore.ts` → `RegionViewer.tsx` draws the box in orange, `Inspector.tsx` shows the text. Changing image turns it off.
+
+Static mode: identical.
 
 ### 5. Give a verdict on the read-out
 
-`features/annotate/MentionTags.tsx` (inside `Inspector.tsx`) has names-it / misses-it buttons. A click creates an annotation with a `tag` geometry through `useCreateAnnotation`, exactly like action 2, replacing any earlier verdict for that read-out. Backend mode stores it via `routers/annotations.py`; static mode via `localStorage`.
+The user clicks **names it** or **misses it** under the read-out.
+
+`MentionTags.tsx` (inside `Inspector.tsx`) → same path as action 2, saving an Annotation with a `tag` geometry. A new click replaces the earlier verdict.
+
+Static mode: saved in the browser.
 
 ### 6. Export and import annotations
 
-`Inspector.tsx` calls `exportAnnotations` on the data source and offers the JSON as a download; import reads a JSON file and calls `importAnnotations`. In backend mode these are `GET /api/annotations` and `POST /api/annotations/import` in `routers/annotations.py`, which skips ids that already exist. Because ids are UUIDs made in the browser, a file exported in static mode imports into the database without collisions.
+The user downloads their annotations as a JSON file, or loads one.
+
+`Inspector.tsx` → `apiSource.ts` sends `GET /api/annotations` (export) or `POST /api/annotations/import` (import) → `routers/annotations.py` returns all rows, or inserts the new ones and skips ids it already has. Ids are made in the browser, so a file exported in static mode imports cleanly.
+
+Static mode: reads or writes the browser's copy.
 
 ### 7. Switch between static and backend mode
 
-`components/SettingsPanel.tsx` writes the mode and backend URL to `stores/settingsStore.ts`, which `source.ts` reads on every call. **Check connection** sends `GET /api/health`; `routers/health.py` reports whether the API is up and, by pinging `services/describe.py`'s model URL, whether Qwen is reachable. `components/Header.tsx` shows the current mode.
+The user opens Settings, picks a mode, and can test the connection.
+
+`SettingsPanel.tsx` writes the mode to `settingsStore.ts`; every later call goes to `apiSource.ts` or `staticSource.ts` accordingly. **Check connection** → `GET /api/health` → `routers/health.py` reports whether the API is up and whether the model server answers → the result is shown in the panel. `Header.tsx` shows the current mode.
 
 ### Files behind every action
 
-- Frontend: `main.tsx` starts React; `App.tsx` lays out the panes and the keyboard shortcuts; `types/api.ts` holds the shapes of samples and annotations, matching `manifest.json` and the backend's `schemas.py`; `features/viewer/registry.ts` and `types.ts` let another data type plug in beside `RegionViewer.tsx`; `index.css` is all styling.
-- Backend: `main.py` creates the app, allows the frontend's origins, includes the routers, and at startup creates the tables and runs `services/indexer.py`; `config.py` reads `.env`; `schemas.py` validates every request and shapes every response; `database.py` gives each request one SQLite session; `tests/` runs the whole service against the sample data with the model server replaced by a stand-in.
+- Frontend: `main.tsx` starts React. `App.tsx` lays out the panes and handles keyboard shortcuts. `api/hooks.ts` wraps every data call so the screen refreshes after a save. `api/source.ts` picks `apiSource.ts` or `staticSource.ts`. `stores/` holds the selected image, the tool, and the mode. `types/api.ts` holds the shapes of samples and annotations. `index.css` is all styling.
+- Backend: `main.py` creates the app, allows the frontend's origins, includes the routers, and at startup creates the tables and runs the indexer. `config.py` reads `.env`. `schemas.py` checks every request and shapes every response. `models.py` defines the tables Dataset, Sample, Annotation. `database.py` gives each request one SQLite session. `tests/` runs the whole service against the sample data, with the model server replaced by a stand-in.
 
 ### Where the data comes from and how it runs
 
-- `data/sample/` is the only data committed: `manifest.json`, the index of the 12 samples with boxes, phrases, read-outs, and verdicts, plus `images/`. `scripts/export_sample.py` builds it from the research repository. `backend/app/services/scan.py` validates it and copies it into the web build. `data/raw/` and `data/db/` (the SQLite file, the model server's address) are ignored by git.
-- `scripts/dev.sh` starts the frontend and backend and prints the URLs, including the proxy addresses needed inside the cluster's VS Code sessions. `scripts/model_server.sbatch` runs `scripts/model_server.py` as a Slurm job. `compose.yml` runs frontend and backend in Docker.
-- `.github/workflows/pages.yml` builds the frontend and deploys it to `nkn002.github.io/visual-readout` on every push to `main`; `test.yml` runs the backend tests and the frontend build. `docs/DESIGN.md` records why it is built this way.
+- `data/sample/`: `manifest.json` (the 12 samples: boxes, phrases, read-outs, verdicts) and `images/`. Built once by `scripts/export_sample.py` from the research repository. `data/raw/` and `data/db/` are ignored by git.
+- `scripts/dev.sh` starts frontend and backend and prints the URLs. `scripts/model_server.sbatch` runs `scripts/model_server.py` on a GPU as a Slurm job. `compose.yml` runs frontend and backend in Docker.
+- `.github/workflows/pages.yml` deploys the frontend to `nkn002.github.io/visual-readout` on every push to `main`; `test.yml` runs the tests. `docs/DESIGN.md` records why it is built this way.
 
 ## How the components interact
 
