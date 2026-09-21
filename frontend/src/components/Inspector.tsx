@@ -104,6 +104,21 @@ export function Inspector(p: Props) {
       <section>
         <h2>Your regions</h2>
         <input id="draft-label" type="text" placeholder="Label for the next region you draw" value={p.draftLabel} onChange={(e) => p.setDraftLabel(e.target.value)} />
+        {regions.length > 0 && (
+          <div className="toolrow">
+            <button
+              type="button"
+              className="clear"
+              onClick={() => {
+                if (window.confirm(`Remove all ${regions.length} region${regions.length === 1 ? "" : "s"} on this image, including the model's answers?`))
+                  for (const a of annotations.filter((x) => x.geometry.type !== "tag")) p.onDelete(a.id);
+              }}
+              title="Delete every box on this image"
+            >
+              Clear all regions
+            </button>
+          </div>
+        )}
         <ul className="annlist">
           {regions.length === 0 && <li className="muted">None yet. Drag on the image to draw one.</li>}
           {regions.map((a) => (

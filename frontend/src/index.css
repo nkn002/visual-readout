@@ -196,3 +196,6 @@ details summary { cursor: pointer; color: var(--muted); font-size: 13px; }
 .answer .swatch.model { background: var(--model); margin-top: 5px; }
 .answer span:nth-child(2) { flex: 1; }
 .err { color: var(--no); margin: 4px 0 0; }
+
+.toolrow .clear { border: 1px solid var(--line); background: var(--bg); border-radius: 999px; padding: 3px 10px; font-size: 12px; color: var(--no); margin-left: auto; }
+.toolrow .clear:hover { border-color: var(--no); }

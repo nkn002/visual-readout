@@ -53,8 +53,8 @@ export function RegionViewer({ sample, condition, annotations, tool, showRegion,
               <button type="button" onClick={() => zoomOut()} title="Zoom out">
                 −
               </button>
-              <button type="button" onClick={() => resetTransform()} title="Reset view">
-                reset
+              <button type="button" onClick={() => resetTransform()} title="Fit the image to the window again (undo zoom and pan)">
+                Fit view
               </button>
             </div>
             <TransformComponent wrapperClass="viewer-wrap" contentClass="viewer-content">

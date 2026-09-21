@@ -17,8 +17,8 @@ The research behind the data maps Qwen2.5-VL region activations into a frozen te
 | Feature | Where in the code |
 |---|---|
 | Browse the 12 images with thumbnails and arrow keys | `frontend/src/components/SampleList.tsx` |
-| Zoom and pan the image | `frontend/src/features/viewer/RegionViewer.tsx` |
-| **Annotation:** drag to draw a labelled region; delete; export and import as JSON | `frontend/src/features/annotate/BoxTool.tsx`, `Inspector.tsx` |
+| Zoom and pan the image, **Fit view** to undo | `frontend/src/features/viewer/RegionViewer.tsx` |
+| **Annotation:** drag to draw a labelled region; delete one or clear all; export and import as JSON | `frontend/src/features/annotate/BoxTool.tsx`, `Inspector.tsx` |
 | **Ask Qwen2.5-VL** what a drawn region contains | `backend/app/services/describe.py`, `scripts/model_server.py` |
 | **Default region:** reveal the dataset's box, its phrase, and the frozen verbalizer's read-out with the judge's verdict | `StageBar.tsx`, `Inspector.tsx` |
 | Give your own names-it / misses-it verdict on that read-out | `frontend/src/features/annotate/MentionTags.tsx` |
