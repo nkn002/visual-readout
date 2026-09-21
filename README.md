@@ -9,10 +9,10 @@ Live: **https://nkn002.github.io/visual-readout/** · Course: DS7400 Deep Learni
 The research project maps Qwen2.5-VL region activations into a frozen text verbalizer (a natural language autoencoder) through a small trained connector. For each Visual Genome region the viewer shows:
 
 - the image with the region box drawn on it, with zoom and pan;
-- four conditions of the same image: original, the box's content swapped for a donor region, the context swapped, and the box blanked;
-- the read-out text of five verbalizer arms (frozen, two cold connectors, two gold-warm-started) under the chosen condition;
-- an LLM judge's verdict on whether each read-out names the object (and, after a content swap, the donor object);
-- the gold description of the region.
+- the frozen verbalizer's read-out for that region, with an LLM judge's verdict on whether it names the object;
+- a way to draw your own boxes and record your own verdict.
+
+HW1 keeps the interface to that. The data file also carries four edited conditions of each image (content swap, context swap, box blank) and four trained connector arms, which later homeworks will surface.
 
 **Data type:** images plus boxes plus text. A sample is one region: `image_id`, `box [x, y, w, h]`, the VG phrase, four image files, per-arm read-outs, and judge verdicts. The committed sample is 12 regions × 4 conditions (48 JPEGs, 3.3 MB) exported from the private research repo.
 
@@ -44,9 +44,8 @@ Tests: `cd backend && .venv/bin/python -m pytest` (8 tests: indexing, endpoints,
 |---|---|
 | Region list with thumbnails and text filter, arrow-key navigation | `frontend/src/components/SampleList.tsx` |
 | Image viewer with zoom, pan, region box overlay | `frontend/src/features/viewer/RegionViewer.tsx` |
-| Condition tabs (keys 1–4) | `frontend/src/components/ConditionTabs.tsx` |
-| Read-outs per arm with judge badges, arm filter, gold text | `frontend/src/components/Inspector.tsx` |
-| **Annotation:** draw labelled boxes on the image (key `b`), give your own names-it / misses-it verdict per read-out, delete, export and import JSON | `features/annotate/BoxTool.tsx`, `MentionTags.tsx` |
+| Frozen-arm read-out with the judge's verdict | `frontend/src/components/Inspector.tsx` |
+| **Annotation:** drag to draw labelled boxes on the image (default tool), give your own names-it / misses-it verdict on the read-out, delete, export and import JSON | `features/annotate/BoxTool.tsx`, `MentionTags.tsx` |
 | **Backend:** FastAPI + SQLModel + SQLite; datasets, samples, file serving, annotations CRUD, bulk import | `backend/app/` |
 | Two data modes behind one interface: static manifest + localStorage, or the API | `frontend/src/api/` |
 | GitHub Pages deploy on every push to `main` | `.github/workflows/pages.yml` |
@@ -65,7 +64,7 @@ visual-readout/
 │       ├── stores/              zustand: viewer state; settings (mode, backend URL, persisted)
 │       ├── features/viewer/     ViewerProps contract, registry (kind -> component), RegionViewer
 │       ├── features/annotate/   BoxTool (drag to draw), MentionTags (yes/no verdict)
-│       └── components/          Header, SampleList, ConditionTabs, Inspector, SettingsPanel
+│       └── components/          Header, SampleList, Inspector, SettingsPanel
 ├── backend/
 │   └── app/
 │       ├── main.py              app factory, CORS, lifespan (create tables, index the manifest)

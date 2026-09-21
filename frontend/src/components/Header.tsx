@@ -12,7 +12,7 @@ export function Header({ dataset }: { dataset: Dataset | undefined }) {
         <strong>Visual read-out</strong>
         {dataset && (
           <span className="sub">
-            {dataset.name} · {dataset.n_samples} regions · {dataset.arms.length} arms
+            {dataset.name} · {dataset.n_samples} regions
           </span>
         )}
       </div>

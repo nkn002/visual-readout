@@ -40,7 +40,7 @@ export function SampleList({ samples, loading, selectedId, onSelect, q, onQuery 
         ))}
         {samples && samples.length === 0 && <li className="muted">No regions match.</li>}
       </ul>
-      <p className="hint">↑ ↓ move · 1–4 condition · b draw box · esc select</p>
+      <p className="hint">↑ ↓ move · drag on the image to draw a box · esc to pan · b to draw again</p>
     </aside>
   );
 }
