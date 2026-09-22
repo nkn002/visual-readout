@@ -80,13 +80,13 @@ export function useDescribeRegion(sampleId: string | undefined) {
   });
 }
 
-export function useActivations(sampleId: string | undefined, layer: number, enabled: boolean) {
+export function useActivations(sampleId: string | undefined, geometry: Geometry | null, layer: number) {
   const src = useDataSource();
   const key = useSourceKey();
   return useQuery({
-    queryKey: ["activations", key, sampleId, layer],
-    queryFn: () => src.getActivations(sampleId!, layer),
-    enabled: enabled && !!sampleId,
+    queryKey: ["activations", key, sampleId, layer, geometry],
+    queryFn: () => src.getActivations(sampleId!, geometry!, layer),
+    enabled: !!sampleId && !!geometry,
     retry: false,
     staleTime: Infinity,
   });

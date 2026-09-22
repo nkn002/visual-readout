@@ -14,6 +14,9 @@ interface Props {
   draftLabel: string;
   setDraftLabel(s: string): void;
   showRegion: boolean;
+  heatRegionId: string | null;
+  heatLoading: boolean;
+  setHeatRegion(id: string | null): void;
 }
 
 /** HW1 shows one arm: the released verbalizer with nothing trained. The other arms stay in the data for later homeworks. */
@@ -172,6 +175,15 @@ export function Inspector(p: Props) {
                 </span>
                 <button type="button" className="ask" disabled={asking !== null} onClick={() => void ask(a)} title="Send this region to Qwen2.5-VL and ask what it is">
                   {asking === a.id ? "Asking…" : "Ask Qwen2.5-VL"}
+                </button>
+                <button
+                  type="button"
+                  className={`ask heat ${p.heatRegionId === a.id ? "on" : ""}`}
+                  aria-pressed={p.heatRegionId === a.id}
+                  onClick={() => p.setHeatRegion(p.heatRegionId === a.id ? null : a.id)}
+                  title="Mean-pool this region's tokens at the read-out layer (hidden state 21) and colour every image token by its similarity to that vector"
+                >
+                  {p.heatRegionId === a.id && p.heatLoading ? "Computing…" : "Activation heatmap"}
                 </button>
                 <button type="button" className="del" onClick={() => p.onDelete(a.id)} title="Delete">
                   ×

@@ -76,8 +76,10 @@ export interface ActivationGrid {
   layer: number;
   rows: number;
   cols: number;
-  values: number[]; // row-major, one per image token
+  values: number[]; // row-major, one per image token: cosine to the region's mean-pooled vector
+  region_tokens: number[]; // flat indices of the tokens that were pooled
   stat: string;
+  pooling?: string | null;
   model?: string | null;
 }
 

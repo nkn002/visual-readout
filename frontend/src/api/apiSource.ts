@@ -64,8 +64,8 @@ export class ApiSource implements DataSource {
     const r = await this.req<DescribeResult>(`/samples/${encodeURIComponent(sampleId)}/describe`, { method: "POST", body: JSON.stringify({ geometry }) });
     return r.annotation;
   }
-  getActivations(sampleId: string, layer: number): Promise<ActivationGrid> {
-    return this.req<ActivationGrid>(`/samples/${encodeURIComponent(sampleId)}/activations?layer=${layer}`);
+  getActivations(sampleId: string, geometry: Geometry, layer: number): Promise<ActivationGrid> {
+    return this.req<ActivationGrid>(`/samples/${encodeURIComponent(sampleId)}/activations`, { method: "POST", body: JSON.stringify({ geometry, layer }) });
   }
   async importAnnotations(list: Annotation[]): Promise<number> {
     const r = await this.req<{ imported: number }>("/annotations/import", { method: "POST", body: JSON.stringify(list) });

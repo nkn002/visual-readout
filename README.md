@@ -20,7 +20,7 @@ The research behind the data maps Qwen2.5-VL region activations into a frozen te
 | Zoom and pan the image, **Fit view** to undo | `frontend/src/features/viewer/RegionViewer.tsx` |
 | **Annotation:** drag to draw a labelled region; rename it any time by clicking its label; delete one or clear all; export and import as JSON | `frontend/src/features/annotate/BoxTool.tsx`, `Inspector.tsx` |
 | **Ask Qwen2.5-VL** what a drawn region contains | `backend/app/services/describe.py`, `scripts/model_server.py` |
-| **Activation heatmap:** colour each image token by the size of its activation at the read-out layer (hidden state 21, output of layer 20) | `scripts/model_server.py`, `backend/app/routers/activations.py`, `frontend/src/features/viewer/heat.ts` |
+| **Activation heatmap** for a drawn region: mean-pool its tokens at the read-out layer (hidden state 21, output of layer 20) into one vector, as the research connector does, and colour every image token by its similarity to that vector | `scripts/model_server.py`, `backend/app/routers/activations.py`, `frontend/src/features/viewer/heat.ts` |
 | **Default region:** reveal the dataset's box, its phrase, and the frozen verbalizer's read-out with the judge's verdict | `StageBar.tsx`, `Inspector.tsx` |
 | Give your own names-it / misses-it verdict on that read-out | `frontend/src/features/annotate/MentionTags.tsx` |
 | **Backend:** annotations persist in SQLite through a FastAPI service | `backend/app/` |
@@ -103,13 +103,13 @@ If the model server is not running, the router answers 503 and the message appea
 
 Static mode: not available; the button says it needs the backend.
 
-### 4. Show the activation heatmap
+### 4. Show a region's activation heatmap
 
-The user clicks **Activation heatmap**. Each image token is coloured by how large its activation is at the read-out layer, the hidden state the research verbalizer reads (hidden state 21, the output of layer 20 of Qwen2.5-VL).
+The user clicks **Activation heatmap** under a drawn region. The image is coloured by how much each image token resembles that region's read-out vector.
 
-`StageBar.tsx` button → `apiSource.ts` sends `GET /api/samples/{id}/activations?layer=21` → `routers/activations.py` (cached after the first call) → `services/activations.py` sends the image to `scripts/model_server.py` → the model server runs one forward pass with hidden states, keeps the image-token positions, and returns the L2 norm of each token on its grid (for a 500×334 image, 12 rows × 18 columns) → `RegionViewer.tsx` paints one translucent cell per token, colours spanning the 2nd to 98th percentile so a single attention-sink token does not flatten the rest; the legend in the bar shows that range.
+`Inspector.tsx` button → `apiSource.ts` sends `POST /api/samples/{id}/activations` with the box → `routers/activations.py` (cached after the first call) → `services/activations.py` sends the image and the box to `scripts/model_server.py` → the model server runs one forward pass of Qwen2.5-VL with hidden states, takes hidden state 21 (the output of layer 20, the read-out layer), selects the tokens under the box with the research code's own rule (`mmav.vgregions.box_to_tokens`, a token counts when the box covers half of it), mean-pools them into one vector exactly as the connector's input is built, and scores every image token by cosine similarity to that vector after subtracting the image's mean token → `RegionViewer.tsx` paints one translucent cell per token (colours span the 2nd to 98th percentile) and outlines the pooled tokens in white; the bar above the image shows which region, how many tokens were pooled, and the cosine range.
 
-Static mode: reads the grids precomputed by `scripts/precompute_activations.py` into `data/sample/activations/`, which the Pages build ships.
+Static mode: not available; the button says it needs the backend.
 
 ### 5. Reveal the default region and its read-out
 
@@ -148,7 +148,7 @@ The user opens Settings, picks a mode, and can test the connection.
 
 ### Where the data comes from and how it runs
 
-- `data/sample/`: `manifest.json` (the 12 samples: boxes, phrases, read-outs, verdicts), `images/`, and `activations/` (one precomputed layer-21 grid per image). Built by `scripts/export_sample.py` from the research repository and `scripts/precompute_activations.py` through the backend. `data/raw/` and `data/db/` are ignored by git.
+- `data/sample/`: `manifest.json` (the 12 samples: boxes, phrases, read-outs, verdicts) and `images/`. Built once by `scripts/export_sample.py` from the research repository. `data/raw/` and `data/db/` are ignored by git.
 - `scripts/dev.sh` starts frontend and backend and prints the URLs. `scripts/model_server.sbatch` runs `scripts/model_server.py` on a GPU as a Slurm job. `compose.yml` runs frontend and backend in Docker.
 - `.github/workflows/pages.yml` deploys the frontend to `nkn002.github.io/visual-readout` on every push to `main`; `test.yml` runs the tests. `docs/DESIGN.md` records why it is built this way.
 

@@ -127,10 +127,14 @@ def test_activations_without_and_with_fake_model_server(client, monkeypatch):
     from app.services import activations as svc
     from app.services import describe as dsvc
 
-    assert client.get("/api/samples/cf-00/activations").status_code == 503
+    box = {"type": "bbox", "x": 0.1, "y": 0.2, "w": 0.3, "h": 0.3}
+    assert client.post("/api/samples/cf-00/activations", json={"geometry": box}).status_code == 503
+    assert client.post("/api/samples/cf-00/activations", json={"geometry": {"type": "point", "x": 0.1, "y": 0.1}}).status_code == 422
     monkeypatch.setattr(dsvc, "model_url", lambda settings: "http://fake:1")
-    monkeypatch.setattr(svc, "fetch_grid", lambda path, layer, url, key=None: {"layer": layer, "rows": 2, "cols": 3, "values": [1, 2, 3, 4, 5, 6], "stat": "l2norm", "model": "fake"})
-    r = client.get("/api/samples/cf-00/activations", params={"layer": 21})
+    monkeypatch.setattr(svc, "fetch_grid", lambda path, b, layer, url, key=None: {
+        "layer": layer, "rows": 2, "cols": 3, "values": [0.1, 0.9, 0.2, 0.3, 0.8, 0.1], "region_tokens": [1, 4],
+        "stat": "cosine", "pooling": "fake", "model": "fake"})
+    r = client.post("/api/samples/cf-00/activations", json={"geometry": box, "layer": 21})
     assert r.status_code == 200, r.text
     g = r.json()
-    assert g["rows"] * g["cols"] == len(g["values"]) == 6 and g["layer"] == 21
+    assert g["rows"] * g["cols"] == len(g["values"]) == 6 and g["region_tokens"] == [1, 4] and g["layer"] == 21

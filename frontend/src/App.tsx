@@ -33,8 +33,9 @@ export default function App() {
   useEffect(() => v.setShowRegion(false), [v.selectedId, v.setShowRegion]);
 
   const annotations = useAnnotations(sample?.id);
-  const heat = useActivations(sample?.id, READOUT_LAYER, v.showHeat);
-  const heatState = !v.showHeat ? "idle" : heat.isPending ? "loading" : heat.error ? "error" : "ready";
+  const heatRegion = annotations.data?.find((a) => a.id === v.heatRegionId && a.geometry.type === "bbox") ?? null;
+  const heat = useActivations(sample?.id, heatRegion ? heatRegion.geometry : null, READOUT_LAYER);
+  useEffect(() => v.setHeatRegion(null), [v.selectedId, v.setHeatRegion]);
   const create = useCreateAnnotation();
   const remove = useDeleteAnnotation(sample?.id);
 
@@ -85,11 +86,18 @@ export default function App() {
             showRegion={v.showRegion}
             toggleRegion={v.toggleRegion}
             hasRegion={!!sample}
-            showHeat={v.showHeat}
-            toggleHeat={v.toggleHeat}
-            heatState={heatState}
-            heatError={heat.error ? (heat.error as Error).message : undefined}
-            heatRange={heat.data ? (({ lo, hi }) => ({ lo, hi }))(normalise(heat.data)) : undefined}
+            heat={
+              heatRegion
+                ? {
+                    label: heatRegion.label,
+                    state: heat.isPending ? "loading" : heat.error ? "error" : "ready",
+                    error: heat.error ? (heat.error as Error).message : undefined,
+                    range: heat.data ? (({ lo, hi }) => ({ lo, hi }))(normalise(heat.data)) : undefined,
+                    tokens: heat.data?.region_tokens.length,
+                  }
+                : null
+            }
+            onHideHeat={() => v.setHeatRegion(null)}
           />
           {sample && dataset ? (
             <Viewer
@@ -100,7 +108,7 @@ export default function App() {
               tool={v.tool}
               showRegion={v.showRegion}
               draftLabel={v.draftLabel}
-              heat={v.showHeat && heat.data ? heat.data : null}
+              heat={heatRegion && heat.data ? heat.data : null}
               onCreate={(a) => create.mutate(a)}
             />
           ) : (
@@ -117,6 +125,9 @@ export default function App() {
           draftLabel={v.draftLabel}
           setDraftLabel={v.setDraftLabel}
           showRegion={v.showRegion}
+          heatRegionId={v.heatRegionId}
+          heatLoading={heat.isPending && !!heatRegion}
+          setHeatRegion={v.setHeatRegion}
         />
       </main>
       <SettingsPanel />

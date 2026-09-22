@@ -85,15 +85,8 @@ export const staticSource: DataSource = {
   async describeRegion(_sampleId: string, _geometry: Geometry): Promise<Annotation> {
     throw new Error("Asking the model needs the backend. Open Settings and switch to Backend.");
   },
-  async getActivations(sampleId: string, layer: number): Promise<ActivationGrid> {
-    // Precomputed by scripts/precompute_activations.py and copied into the build by scan.py.
-    const r = await fetch(`${BASE}data/activations/${encodeURIComponent(sampleId)}.json`);
-    // The dev server answers unknown paths with index.html, so check the type as well as the status.
-    if (!r.ok || !(r.headers.get("content-type") ?? "").includes("json"))
-      throw new Error("No precomputed activations for this image. Switch to Backend mode to compute them.");
-    const g = (await r.json()) as ActivationGrid;
-    if (g.layer !== layer) throw new Error(`Precomputed grid is for layer ${g.layer}, not ${layer}.`);
-    return g;
+  async getActivations(_sampleId: string, _geometry: Geometry, _layer: number): Promise<ActivationGrid> {
+    throw new Error("The activation heatmap needs the backend. Open Settings and switch to Backend.");
   },
   async importAnnotations(list: Annotation[]): Promise<number> {
     const have = new Set(readAll().map((a) => a.id));

@@ -9,10 +9,12 @@ API (JSON):
     GET  /health              -> {"ready": true, "model": "...", "device": "cuda:0"}
     POST /describe            {"images": ["<base64 jpeg/png>", ...], "prompt": "...", "max_new_tokens": 96}
                               -> {"text": "...", "model": "...", "seconds": 1.2}
-    POST /activations         {"image": "<base64>", "layer": 21}
-                              -> {"layer": 21, "rows": 12, "cols": 18, "values": [...], "stat": "l2norm"}
-                              per image token, the L2 norm of its hidden state after layer `layer`-1
-                              (hidden_states[21] = the read-out layer L20 used by the research code)
+    POST /activations         {"image": "<base64>", "box": {"x","y","w","h"} (0..1), "layer": 21}
+                              -> {"layer", "rows", "cols", "values": [...], "region_tokens": [...], "stat"}
+                              The tokens under the box are mean-pooled into one vector, exactly as the
+                              research connector does (mmav.vgregions.box_to_tokens, 50% cover), and each
+                              image token gets its cosine similarity to that vector after subtracting the
+                              image's mean token. hidden_states[21] is the read-out layer L20.
 
 On start it writes its URL to --url-file (default data/db/model_server.url) so the backend finds it.
 Loading and prompting follow mmav.donor.load_vl in the nla repo: bf16, device_map cuda, chat template
@@ -24,6 +26,7 @@ import argparse
 import base64
 import io
 import json
+import os
 import socket
 import threading
 import time
@@ -31,6 +34,54 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 
 VL = "Qwen/Qwen2.5-VL-7B-Instruct"
+NLA_ROOT = Path(os.environ.get("NLA_ROOT", "/standard/AikyamLab/khai/nla"))
+
+
+def _box_to_tokens():
+    """Prefer the research repo's own function; fall back to a faithful copy if mmav is not importable."""
+    try:
+        import sys
+
+        sys.path.insert(0, str(NLA_ROOT / "src"))
+        from mmav.vgregions import box_to_tokens  # noqa: WPS433
+
+        return box_to_tokens, "mmav.vgregions.box_to_tokens"
+    except Exception:  # noqa: BLE001
+        import numpy as np
+
+        PATCH, MERGE = 14, 2
+        CELL = PATCH * MERGE
+
+        def box_to_tokens(box, grid_thw, orig_wh, min_cover: float = 0.5):
+            _, gh, gw = [int(x) for x in grid_thw]
+            rows, cols = gh // MERGE, gw // MERGE
+            rw, rh = gw * PATCH, gh * PATCH
+            ow, oh = orig_wh
+            sx, sy = rw / ow, rh / oh
+            x0, y0, bw, bh = box
+            bx0, bx1 = max(0.0, x0 * sx), min(float(rw), (x0 + bw) * sx)
+            by0, by1 = max(0.0, y0 * sy), min(float(rh), (y0 + bh) * sy)
+            if bx1 <= bx0 or by1 <= by0:
+                return np.empty(0, dtype=np.int64), 0.0
+            c0, c1 = max(0, int(np.floor(bx0 / CELL))), min(cols, int(np.ceil(bx1 / CELL)))
+            r0, r1 = max(0, int(np.floor(by0 / CELL))), min(rows, int(np.ceil(by1 / CELL)))
+            keep = []
+            for r in range(r0, r1):
+                oy = min(by1, (r + 1) * CELL) - max(by0, r * CELL)
+                for c in range(c0, c1):
+                    ox = min(bx1, (c + 1) * CELL) - max(bx0, c * CELL)
+                    if ox * oy >= min_cover * CELL * CELL:
+                        keep.append(r * cols + c)
+            if not keep:
+                cx, cy = (bx0 + bx1) / 2, (by0 + by1) / 2
+                keep = [min(rows - 1, int(cy // CELL)) * cols + min(cols - 1, int(cx // CELL))]
+            idx = np.array(sorted(keep), dtype=np.int64)
+            return idx, float(len(idx) / (rows * cols))
+
+        return box_to_tokens, "local copy of mmav.vgregions.box_to_tokens"
+
+
+BOX_TO_TOKENS, BOX_TO_TOKENS_SRC = _box_to_tokens()
 
 
 class Model:
@@ -52,8 +103,9 @@ class Model:
             out = self.model.generate(**inp, max_new_tokens=max_new_tokens, do_sample=False)
         return self.proc.batch_decode(out[:, inp.input_ids.shape[1] :], skip_special_tokens=True)[0].strip()
 
-    def activations(self, image, layer: int = 21, prompt: str = "Describe this image.") -> dict:
-        """Per-image-token L2 norm of hidden_states[layer], on the merged token grid (rows x cols)."""
+    def activations(self, image, box: dict, layer: int = 21, prompt: str = "Describe this image.") -> dict:
+        """Region heatmap: mean-pool the tokens under `box` (normalised 0..1) at hidden_states[layer] into one
+        vector, then score every image token by cosine to it, both mean-centred over the image's tokens."""
         content = [{"type": "image", "image": image}, {"type": "text", "text": prompt}]
         text = self.proc.apply_chat_template([{"role": "user", "content": content}], tokenize=False, add_generation_prompt=True)
         inp = self.proc(text=[text], images=[image], padding=True, return_tensors="pt").to(self.model.device)
@@ -61,12 +113,27 @@ class Model:
             out = self.model(**inp, output_hidden_states=True)
         h = out.hidden_states[layer][0]
         pos = inp.input_ids[0] == self.model.config.image_token_id
-        norms = h[pos].float().norm(dim=-1).cpu().tolist()
-        _, gh, gw = [int(x) for x in inp.image_grid_thw[0].tolist()]
+        toks = h[pos].float()  # [T, d], raster order over the merged token grid
+        grid_thw = inp.image_grid_thw[0].tolist()
+        _, gh, gw = [int(x) for x in grid_thw]
         rows, cols = gh // 2, gw // 2
-        if rows * cols != len(norms):
-            raise RuntimeError(f"token grid {rows}x{cols} != {len(norms)} image tokens")
-        return {"layer": layer, "rows": rows, "cols": cols, "values": norms, "stat": "l2norm", "n_layers": len(out.hidden_states) - 1}
+        if rows * cols != toks.shape[0]:
+            raise RuntimeError(f"token grid {rows}x{cols} != {toks.shape[0]} image tokens")
+        ow, oh = image.size
+        px = (box["x"] * ow, box["y"] * oh, box["w"] * ow, box["h"] * oh)
+        idx, frac = BOX_TO_TOKENS(px, grid_thw, (ow, oh))
+        idx = [int(i) for i in idx]
+        region = toks[idx].mean(dim=0)  # the connector's input: one mean-pooled vector
+        centre = toks.mean(dim=0)
+        t_c = toks - centre
+        r_c = region - centre
+        cos = self.torch.nn.functional.cosine_similarity(t_c, r_c.unsqueeze(0), dim=-1)
+        return {
+            "layer": layer, "rows": rows, "cols": cols,
+            "values": cos.cpu().tolist(), "region_tokens": idx, "grid_frac": float(frac),
+            "region_norm": float(region.norm()), "stat": "cosine to the region's mean-pooled vector, mean-centred",
+            "pooling": BOX_TO_TOKENS_SRC, "n_layers": len(out.hidden_states) - 1,
+        }
 
 
 def make_handler(model: Model):
@@ -95,11 +162,12 @@ def make_handler(model: Model):
                 n = int(self.headers.get("content-length", "0"))
                 req = json.loads(self.rfile.read(n) or b"{}")
                 if path == "/activations":
-                    if not req.get("image"):
-                        return self._json(400, {"error": "no image"})
+                    box = req.get("box") or {}
+                    if not req.get("image") or not all(k in box for k in ("x", "y", "w", "h")):
+                        return self._json(400, {"error": "need image and box {x, y, w, h}"})
                     image = Image.open(io.BytesIO(base64.b64decode(req["image"]))).convert("RGB")
                     t0 = time.time()
-                    grid = model.activations(image, int(req.get("layer", 21)))
+                    grid = model.activations(image, {k: float(box[k]) for k in ("x", "y", "w", "h")}, int(req.get("layer", 21)))
                     return self._json(200, {**grid, "model": model.model_id, "seconds": round(time.time() - t0, 2)})
                 images = [Image.open(io.BytesIO(base64.b64decode(b))).convert("RGB") for b in req.get("images", [])]
                 prompt = str(req.get("prompt", "Describe this image."))

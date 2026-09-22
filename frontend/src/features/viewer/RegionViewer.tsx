@@ -79,6 +79,11 @@ export function RegionViewer({ sample, condition, annotations, tool, showRegion,
                           />
                         );
                       })}
+                      {heat.region_tokens.map((i) => {
+                        const r = Math.floor(i / heat.cols);
+                        const c = i % heat.cols;
+                        return <rect key={`p${i}`} className="pooled" x={(c * w) / heat.cols} y={(r * h) / heat.rows} width={w / heat.cols} height={h / heat.rows} />;
+                      })}
                     </g>
                   )}
                   {showRegion && (

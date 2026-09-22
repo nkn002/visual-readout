@@ -204,7 +204,9 @@ details summary { cursor: pointer; color: var(--muted); font-size: 13px; }
 .lbl .editable:hover { border-bottom-color: var(--accent); }
 .lbl .editing { font: inherit; padding: 1px 4px; border: 1px solid var(--accent); border-radius: 3px; background: var(--surface); color: inherit; width: 100%; }
 
-.stagebar .toggle.heat.on { background: #932667; border-color: #932667; color: #fff; }
 .overlay .heat rect { opacity: 0.55; pointer-events: none; }
-.legend { display: inline-flex; align-items: center; gap: 6px; font-size: 12px; color: var(--muted); }
-.legend .bar { width: 72px; height: 10px; border-radius: 2px; background: linear-gradient(90deg, #000004, #420a68, #932667, #dd513a, #fca50a, #fcffa4); }
+.overlay .heat rect.pooled { fill: none; opacity: 1; stroke: #fff; stroke-width: 1.5; vector-effect: non-scaling-stroke; }
+.heatinfo { display: inline-flex; align-items: center; gap: 6px; font-size: 12px; color: var(--muted); margin-left: auto; }
+.heatinfo .bar { width: 60px; height: 10px; border-radius: 2px; background: linear-gradient(90deg, #000004, #420a68, #932667, #dd513a, #fca50a, #fcffa4); }
+.heatinfo .hide { border: 0; background: none; color: var(--muted); font-size: 16px; padding: 0 4px; }
+.annlist .ask.heat.on { background: #932667; border-color: #932667; color: #fff; }

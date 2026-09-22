@@ -83,10 +83,18 @@ class DescribeResult(SQLModel):
     annotation: AnnotationRead
 
 
+class ActivationRequest(SQLModel):
+    geometry: dict[str, Any]  # {"type": "bbox", "x", "y", "w", "h"} normalised to the image
+    layer: int = 21
+    condition: str = "orig"
+
+
 class ActivationGrid(SQLModel):
     layer: int
     rows: int
     cols: int
-    values: list[float]  # row-major, one per image token
+    values: list[float]  # row-major, one per image token: cosine to the region's mean-pooled vector
+    region_tokens: list[int]  # flat indices of the tokens that were pooled
     stat: str
+    pooling: str | None = None
     model: str | None = None
