@@ -220,3 +220,4 @@ details summary { cursor: pointer; color: var(--muted); font-size: 13px; }
 .annlist li.region .lbl { flex: 1 1 140px; }
 .annlist li.region .lbl small { white-space: nowrap; }
 .annlist li.region .ask { margin-left: 0; }
+.subwindow .kv dd { overflow-wrap: anywhere; }
