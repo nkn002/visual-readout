@@ -210,3 +210,7 @@ details summary { cursor: pointer; color: var(--muted); font-size: 13px; }
 .heatinfo .bar { width: 60px; height: 10px; border-radius: 2px; background: linear-gradient(90deg, #000004, #420a68, #932667, #dd513a, #fca50a, #fcffa4); }
 .heatinfo .hide { border: 0; background: none; color: var(--muted); font-size: 16px; padding: 0 4px; }
 .annlist .ask.heat.on { background: #932667; border-color: #932667; color: #fff; }
+.annlist li.region .row { flex-wrap: wrap; row-gap: 4px; }
+.annlist li.region .lbl { flex: 1 1 140px; }
+.annlist li.region .lbl small { white-space: nowrap; }
+.annlist li.region .ask { margin-left: 0; }
