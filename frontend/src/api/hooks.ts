@@ -79,3 +79,15 @@ export function useDescribeRegion(sampleId: string | undefined) {
     onSuccess: () => qc.invalidateQueries({ queryKey: ["annotations", key, sampleId] }),
   });
 }
+
+export function useActivations(sampleId: string | undefined, layer: number, enabled: boolean) {
+  const src = useDataSource();
+  const key = useSourceKey();
+  return useQuery({
+    queryKey: ["activations", key, sampleId, layer],
+    queryFn: () => src.getActivations(sampleId!, layer),
+    enabled: enabled && !!sampleId,
+    retry: false,
+    staleTime: Infinity,
+  });
+}

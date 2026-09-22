@@ -81,3 +81,12 @@ class DescribeResult(SQLModel):
     description: str
     model: str
     annotation: AnnotationRead
+
+
+class ActivationGrid(SQLModel):
+    layer: int
+    rows: int
+    cols: int
+    values: list[float]  # row-major, one per image token
+    stat: str
+    model: str | None = None

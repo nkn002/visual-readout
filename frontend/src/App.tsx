@@ -1,5 +1,6 @@
 import { useEffect } from "react";
-import { useAnnotations, useCreateAnnotation, useDatasets, useDeleteAnnotation, useSamples } from "./api/hooks";
+import { useActivations, useAnnotations, useCreateAnnotation, useDatasets, useDeleteAnnotation, useSamples } from "./api/hooks";
+import { normalise } from "./features/viewer/heat";
 import { Header } from "./components/Header";
 import { Inspector } from "./components/Inspector";
 import { SampleList } from "./components/SampleList";
@@ -12,6 +13,8 @@ import type { ConditionKey } from "./types/api";
 
 // HW1 shows the original image only. The edited conditions stay in the data for later homeworks.
 const CONDITION: ConditionKey = "orig";
+// hidden_states[21] is the output of layer 20: the read-out layer the research verbalizer reads.
+const READOUT_LAYER = 21;
 
 export default function App() {
   const datasets = useDatasets();
@@ -30,6 +33,8 @@ export default function App() {
   useEffect(() => v.setShowRegion(false), [v.selectedId, v.setShowRegion]);
 
   const annotations = useAnnotations(sample?.id);
+  const heat = useActivations(sample?.id, READOUT_LAYER, v.showHeat);
+  const heatState = !v.showHeat ? "idle" : heat.isPending ? "loading" : heat.error ? "error" : "ready";
   const create = useCreateAnnotation();
   const remove = useDeleteAnnotation(sample?.id);
 
@@ -74,7 +79,18 @@ export default function App() {
       <main className="panes">
         <SampleList samples={list} loading={samples.isPending} selectedId={v.selectedId} onSelect={v.select} />
         <section className="stage" aria-label="Viewer">
-          <StageBar tool={v.tool} setTool={v.setTool} showRegion={v.showRegion} toggleRegion={v.toggleRegion} hasRegion={!!sample} />
+          <StageBar
+            tool={v.tool}
+            setTool={v.setTool}
+            showRegion={v.showRegion}
+            toggleRegion={v.toggleRegion}
+            hasRegion={!!sample}
+            showHeat={v.showHeat}
+            toggleHeat={v.toggleHeat}
+            heatState={heatState}
+            heatError={heat.error ? (heat.error as Error).message : undefined}
+            heatRange={heat.data ? (({ lo, hi }) => ({ lo, hi }))(normalise(heat.data)) : undefined}
+          />
           {sample && dataset ? (
             <Viewer
               sample={sample}
@@ -84,6 +100,7 @@ export default function App() {
               tool={v.tool}
               showRegion={v.showRegion}
               draftLabel={v.draftLabel}
+              heat={v.showHeat && heat.data ? heat.data : null}
               onCreate={(a) => create.mutate(a)}
             />
           ) : (

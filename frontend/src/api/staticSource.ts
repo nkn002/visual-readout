@@ -1,4 +1,4 @@
-import type { Annotation, AnnotationCreate, AnnotationUpdate, ConditionKey, Dataset, Geometry, Manifest, Page, Sample } from "../types/api";
+import type { ActivationGrid, Annotation, AnnotationCreate, AnnotationUpdate, ConditionKey, Dataset, Geometry, Manifest, Page, Sample } from "../types/api";
 import type { DataSource } from "./source";
 import { newId } from "./source";
 
@@ -84,6 +84,14 @@ export const staticSource: DataSource = {
   },
   async describeRegion(_sampleId: string, _geometry: Geometry): Promise<Annotation> {
     throw new Error("Asking the model needs the backend. Open Settings and switch to Backend.");
+  },
+  async getActivations(sampleId: string, layer: number): Promise<ActivationGrid> {
+    // Precomputed by scripts/precompute_activations.py and copied into the build by scan.py.
+    const r = await fetch(`${BASE}data/activations/${encodeURIComponent(sampleId)}.json`);
+    if (!r.ok) throw new Error("No precomputed activations for this image. Switch to Backend mode to compute them.");
+    const g = (await r.json()) as ActivationGrid;
+    if (g.layer !== layer) throw new Error(`Precomputed grid is for layer ${g.layer}, not ${layer}.`);
+    return g;
   },
   async importAnnotations(list: Annotation[]): Promise<number> {
     const have = new Set(readAll().map((a) => a.id));

@@ -53,6 +53,10 @@ def stage(data_dir: str | Path, out_dir: str | Path) -> Path:
                 dst = out / rel
                 dst.parent.mkdir(parents=True, exist_ok=True)
                 shutil.copyfile(data_dir / rel, dst)
+    # precomputed activation grids (scripts/precompute_activations.py) make the heatmap work without a server
+    acts = data_dir / "activations"
+    if acts.is_dir():
+        shutil.copytree(acts, out / "activations")
     return out
 
 

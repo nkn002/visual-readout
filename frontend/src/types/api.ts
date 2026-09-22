@@ -72,6 +72,15 @@ export interface AnnotationUpdate {
   note?: string;
 }
 
+export interface ActivationGrid {
+  layer: number;
+  rows: number;
+  cols: number;
+  values: number[]; // row-major, one per image token
+  stat: string;
+  model?: string | null;
+}
+
 export interface Health {
   status: string;
   datasets: number;

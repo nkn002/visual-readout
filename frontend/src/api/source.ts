@@ -1,5 +1,5 @@
 import { useMemo } from "react";
-import type { Annotation, AnnotationCreate, AnnotationUpdate, ConditionKey, Dataset, Geometry, Page, Sample } from "../types/api";
+import type { ActivationGrid, Annotation, AnnotationCreate, AnnotationUpdate, ConditionKey, Dataset, Geometry, Page, Sample } from "../types/api";
 import { useSettings } from "../stores/settingsStore";
 import { staticSource } from "./staticSource";
 import { ApiSource } from "./apiSource";
@@ -19,6 +19,8 @@ export interface DataSource {
   importAnnotations(list: Annotation[]): Promise<number>;
   /** Ask the vision model what a box contains; the answer comes back as a `model` annotation. */
   describeRegion(sampleId: string, geometry: Geometry): Promise<Annotation>;
+  /** Per-image-token activation norms at hidden_states[layer] (21 = the read-out layer). */
+  getActivations(sampleId: string, layer: number): Promise<ActivationGrid>;
 }
 
 export function useDataSource(): DataSource {

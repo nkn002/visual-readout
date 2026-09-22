@@ -9,6 +9,10 @@ API (JSON):
     GET  /health              -> {"ready": true, "model": "...", "device": "cuda:0"}
     POST /describe            {"images": ["<base64 jpeg/png>", ...], "prompt": "...", "max_new_tokens": 96}
                               -> {"text": "...", "model": "...", "seconds": 1.2}
+    POST /activations         {"image": "<base64>", "layer": 21}
+                              -> {"layer": 21, "rows": 12, "cols": 18, "values": [...], "stat": "l2norm"}
+                              per image token, the L2 norm of its hidden state after layer `layer`-1
+                              (hidden_states[21] = the read-out layer L20 used by the research code)
 
 On start it writes its URL to --url-file (default data/db/model_server.url) so the backend finds it.
 Loading and prompting follow mmav.donor.load_vl in the nla repo: bf16, device_map cuda, chat template
@@ -48,6 +52,22 @@ class Model:
             out = self.model.generate(**inp, max_new_tokens=max_new_tokens, do_sample=False)
         return self.proc.batch_decode(out[:, inp.input_ids.shape[1] :], skip_special_tokens=True)[0].strip()
 
+    def activations(self, image, layer: int = 21, prompt: str = "Describe this image.") -> dict:
+        """Per-image-token L2 norm of hidden_states[layer], on the merged token grid (rows x cols)."""
+        content = [{"type": "image", "image": image}, {"type": "text", "text": prompt}]
+        text = self.proc.apply_chat_template([{"role": "user", "content": content}], tokenize=False, add_generation_prompt=True)
+        inp = self.proc(text=[text], images=[image], padding=True, return_tensors="pt").to(self.model.device)
+        with self.lock, self.torch.no_grad():
+            out = self.model(**inp, output_hidden_states=True)
+        h = out.hidden_states[layer][0]
+        pos = inp.input_ids[0] == self.model.config.image_token_id
+        norms = h[pos].float().norm(dim=-1).cpu().tolist()
+        _, gh, gw = [int(x) for x in inp.image_grid_thw[0].tolist()]
+        rows, cols = gh // 2, gw // 2
+        if rows * cols != len(norms):
+            raise RuntimeError(f"token grid {rows}x{cols} != {len(norms)} image tokens")
+        return {"layer": layer, "rows": rows, "cols": cols, "values": norms, "stat": "l2norm", "n_layers": len(out.hidden_states) - 1}
+
 
 def make_handler(model: Model):
     class Handler(BaseHTTPRequestHandler):
@@ -66,13 +86,21 @@ def make_handler(model: Model):
                 self._json(404, {"error": "not found"})
 
         def do_POST(self):
-            if self.path.rstrip("/") != "/describe":
+            path = self.path.rstrip("/")
+            if path not in ("/describe", "/activations"):
                 return self._json(404, {"error": "not found"})
             try:
                 from PIL import Image
 
                 n = int(self.headers.get("content-length", "0"))
                 req = json.loads(self.rfile.read(n) or b"{}")
+                if path == "/activations":
+                    if not req.get("image"):
+                        return self._json(400, {"error": "no image"})
+                    image = Image.open(io.BytesIO(base64.b64decode(req["image"]))).convert("RGB")
+                    t0 = time.time()
+                    grid = model.activations(image, int(req.get("layer", 21)))
+                    return self._json(200, {**grid, "model": model.model_id, "seconds": round(time.time() - t0, 2)})
                 images = [Image.open(io.BytesIO(base64.b64decode(b))).convert("RGB") for b in req.get("images", [])]
                 prompt = str(req.get("prompt", "Describe this image."))
                 if not images:

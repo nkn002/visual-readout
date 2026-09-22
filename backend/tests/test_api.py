@@ -121,3 +121,16 @@ def test_describe_with_fake_model_server(client, monkeypatch):
     assert body["label"] == "a bottle" and body["annotation"]["source"] == "model" and body["annotation"]["note"].startswith("A glass")
     ids = {a["id"] for a in client.get("/api/samples/cf-00/annotations").json()}
     assert body["annotation"]["id"] in ids
+
+
+def test_activations_without_and_with_fake_model_server(client, monkeypatch):
+    from app.services import activations as svc
+    from app.services import describe as dsvc
+
+    assert client.get("/api/samples/cf-00/activations").status_code == 503
+    monkeypatch.setattr(dsvc, "model_url", lambda settings: "http://fake:1")
+    monkeypatch.setattr(svc, "fetch_grid", lambda path, layer, url, key=None: {"layer": layer, "rows": 2, "cols": 3, "values": [1, 2, 3, 4, 5, 6], "stat": "l2norm", "model": "fake"})
+    r = client.get("/api/samples/cf-00/activations", params={"layer": 21})
+    assert r.status_code == 200, r.text
+    g = r.json()
+    assert g["rows"] * g["cols"] == len(g["values"]) == 6 and g["layer"] == 21

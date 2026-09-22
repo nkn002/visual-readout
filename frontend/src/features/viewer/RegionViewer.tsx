@@ -3,6 +3,7 @@ import { TransformComponent, TransformWrapper } from "react-zoom-pan-pinch";
 import { useDataSource } from "../../api/source";
 import { BoxTool } from "../annotate/BoxTool";
 import type { ViewerProps } from "./types";
+import { colorAt, normalise } from "./heat";
 
 function useFit(w: number, h: number) {
   const ref = useRef<HTMLDivElement>(null);
@@ -24,13 +25,14 @@ function useFit(w: number, h: number) {
   return { ref, size };
 }
 
-export function RegionViewer({ sample, condition, annotations, tool, showRegion, draftLabel, onCreate }: ViewerProps) {
+export function RegionViewer({ sample, condition, annotations, tool, showRegion, draftLabel, heat, onCreate }: ViewerProps) {
   const src = useDataSource();
   const url = src.fileUrl(sample, condition);
   const [w, h] = sample.image_size ?? [500, 334];
   const [bx, by, bw, bh] = sample.box;
   const { ref, size } = useFit(w, h);
   const fontSize = Math.max(11, w / 40);
+  const heatCells = heat ? normalise(heat).t : null;
 
   return (
     <div className={`viewer tool-${tool}`} ref={ref}>
@@ -61,6 +63,24 @@ export function RegionViewer({ sample, condition, annotations, tool, showRegion,
               <div className="frame" style={{ width: size.width, height: size.height }}>
                 {url ? <img src={url} alt={sample.phrase} draggable={false} /> : <div className="no-image">No image for this condition</div>}
                 <svg className="overlay" viewBox={`0 0 ${w} ${h}`} preserveAspectRatio="none">
+                  {heat && heatCells && (
+                    <g className="heat" aria-label={`activation heatmap, ${heat.rows} by ${heat.cols} image tokens`}>
+                      {heatCells.map((t, i) => {
+                        const r = Math.floor(i / heat.cols);
+                        const c = i % heat.cols;
+                        return (
+                          <rect
+                            key={i}
+                            x={(c * w) / heat.cols}
+                            y={(r * h) / heat.rows}
+                            width={w / heat.cols + 0.5}
+                            height={h / heat.rows + 0.5}
+                            fill={colorAt(t)}
+                          />
+                        );
+                      })}
+                    </g>
+                  )}
                   {showRegion && (
                     <g className="region">
                       <rect x={bx} y={by} width={bw} height={bh} />
