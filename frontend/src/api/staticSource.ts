@@ -88,7 +88,9 @@ export const staticSource: DataSource = {
   async getActivations(sampleId: string, layer: number): Promise<ActivationGrid> {
     // Precomputed by scripts/precompute_activations.py and copied into the build by scan.py.
     const r = await fetch(`${BASE}data/activations/${encodeURIComponent(sampleId)}.json`);
-    if (!r.ok) throw new Error("No precomputed activations for this image. Switch to Backend mode to compute them.");
+    // The dev server answers unknown paths with index.html, so check the type as well as the status.
+    if (!r.ok || !(r.headers.get("content-type") ?? "").includes("json"))
+      throw new Error("No precomputed activations for this image. Switch to Backend mode to compute them.");
     const g = (await r.json()) as ActivationGrid;
     if (g.layer !== layer) throw new Error(`Precomputed grid is for layer ${g.layer}, not ${layer}.`);
     return g;
