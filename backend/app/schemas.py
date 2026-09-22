@@ -91,9 +91,12 @@ class ActivationRequest(SQLModel):
 
 class ActivationVector(SQLModel):
     layer: int
-    dim: int
-    vector: list[float]  # the region's activation: mean of the pooled tokens' hidden states
-    norm: float
+    dim: int  # size of the full pooled vector (3584 for Qwen2.5-VL-7B)
+    reduced: list[float]  # the pooled vector projected onto 64 principal components
+    explained: list[float]  # variance ratio each component explains
+    basis: str  # how the components were fitted
+    norm: float  # L2 norm of the full pooled vector
+    top: list[dict[str, Any]]  # the 8 largest full dimensions: {dim, value}
     region_tokens: list[int]  # flat indices (row-major on rows x cols) of the tokens that were pooled
     rows: int
     cols: int

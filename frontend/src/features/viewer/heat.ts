@@ -14,14 +14,3 @@ export function symmetricRange(v: number[]): number {
   return Math.max(abs[Math.min(abs.length - 1, Math.round(0.99 * (abs.length - 1)))], 1e-9);
 }
 
-/** Grid shape for `dim` cells: as close to 4:3 as the divisors allow (3584 -> 56 x 64). */
-export function gridShape(dim: number): { rows: number; cols: number } {
-  let best = { rows: 1, cols: dim };
-  for (let r = 1; r * r <= dim; r++) {
-    if (dim % r === 0) {
-      const c = dim / r;
-      if (Math.abs(c / r - 4 / 3) < Math.abs(best.cols / best.rows - 4 / 3)) best = { rows: r, cols: c };
-    }
-  }
-  return best;
-}

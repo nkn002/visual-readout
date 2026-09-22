@@ -10,11 +10,14 @@ API (JSON):
     POST /describe            {"images": ["<base64 jpeg/png>", ...], "prompt": "...", "max_new_tokens": 96}
                               -> {"text": "...", "model": "...", "seconds": 1.2}
     POST /activations         {"image": "<base64>", "box": {"x","y","w","h"} (0..1), "layer": 21}
-                              -> {"layer", "dim", "vector": [...], "norm", "region_tokens": [...], "rows", "cols"}
+                              -> {"layer", "dim", "reduced": [64 floats], "explained": [...], "basis", "norm",
+                                  "top": [{"dim", "value"}...], "region_tokens": [...], "rows", "cols"}
                               The region's activation: the tokens under the box, chosen with the research
                               repo's rule (mmav.vgregions.box_to_tokens, 50% cover), mean-pooled at
-                              hidden_states[layer] into one vector, exactly the connector's input.
-                              hidden_states[21] is the read-out layer L20.
+                              hidden_states[layer] into one 3584-d vector, exactly the connector's input,
+                              then projected onto 64 principal components fitted once on 20,000 of the
+                              research repo's own region vectors (results/data/vgreg_V.npy) and cached in
+                              --pca-file. hidden_states[21] is the read-out layer L20.
 
 On start it writes its URL to --url-file (default data/db/model_server.url) so the backend finds it.
 Loading and prompting follow mmav.donor.load_vl in the nla repo: bf16, device_map cuda, chat template
@@ -82,15 +85,42 @@ def _box_to_tokens():
 
 
 BOX_TO_TOKENS, BOX_TO_TOKENS_SRC = _box_to_tokens()
+PCA_K = 64
+
+
+def load_or_fit_pca(pca_file: Path, source: Path, n_rows: int = 20000, seed: int = 0):
+    """(mean, components [K, d], explained variance ratio [K], description). Fit once, cache to pca_file."""
+    import numpy as np
+
+    if pca_file.exists():
+        z = np.load(pca_file)
+        return z["mean"], z["components"], z["explained"], str(z["basis"])
+    if not source.exists():
+        return None
+    V = np.load(source, mmap_mode="r")
+    rng = np.random.default_rng(seed)
+    rows = np.sort(rng.choice(V.shape[0], size=min(n_rows, V.shape[0]), replace=False))
+    X = np.asarray(V[rows], dtype=np.float32)
+    mean = X.mean(axis=0)
+    Xc = X - mean
+    _, S, Vt = np.linalg.svd(Xc, full_matrices=False)
+    var = S**2 / (len(X) - 1)
+    explained = (var / var.sum())[:PCA_K]
+    components = Vt[:PCA_K]
+    basis = f"PCA-{PCA_K} fitted on {len(rows)} region vectors from {source.name} (seed {seed})"
+    pca_file.parent.mkdir(parents=True, exist_ok=True)
+    np.savez(pca_file, mean=mean, components=components, explained=explained, basis=basis)
+    return mean, components, explained, basis
 
 
 class Model:
-    def __init__(self, model_id: str, device_map: str = "cuda"):
+    def __init__(self, model_id: str, device_map: str = "cuda", pca=None):
         import torch
         from transformers import AutoProcessor, Qwen2_5_VLForConditionalGeneration
 
         self.torch = torch
         self.model_id = model_id
+        self.pca = pca  # (mean, components, explained, basis) or None
         self.proc = AutoProcessor.from_pretrained(model_id)
         self.model = Qwen2_5_VLForConditionalGeneration.from_pretrained(model_id, dtype=torch.bfloat16, device_map=device_map).eval()
         self.lock = threading.Lock()
@@ -123,10 +153,28 @@ class Model:
         idx, frac = BOX_TO_TOKENS(px, grid_thw, (ow, oh))
         idx = [int(i) for i in idx]
         region = toks[idx].mean(dim=0)  # the connector's input: one mean-pooled vector
+        v = region.cpu().numpy()
+        if self.pca is not None:
+            mean, comps, explained, basis = self.pca
+        else:  # no research vectors at hand: fit the basis on this image's own tokens
+            import numpy as np
+
+            T = toks.cpu().numpy()
+            mean = T.mean(axis=0)
+            _, S, Vt = np.linalg.svd(T - mean, full_matrices=False)
+            var = S**2 / max(1, len(T) - 1)
+            k = min(PCA_K, len(S))
+            comps, explained = Vt[:k], (var / var.sum())[:k]
+            basis = f"PCA-{k} fitted on this image's {len(T)} tokens (no research vectors found)"
+        reduced = (v - mean) @ comps.T
+        order = sorted(range(len(v)), key=lambda i: -abs(float(v[i])))[:8]
         return {
-            "layer": layer, "dim": int(region.shape[0]),
-            "vector": [round(float(x), 4) for x in region.cpu().tolist()],
+            "layer": layer, "dim": int(v.shape[0]),
+            "reduced": [round(float(x), 4) for x in reduced.tolist()],
+            "explained": [round(float(x), 5) for x in explained.tolist()],
+            "basis": basis,
             "norm": float(region.norm()),
+            "top": [{"dim": int(i), "value": round(float(v[i]), 3)} for i in order],
             "region_tokens": idx, "rows": rows, "cols": cols, "grid_frac": float(frac),
             "pooling": BOX_TO_TOKENS_SRC, "n_layers": len(out.hidden_states) - 1,
         }
@@ -186,11 +234,16 @@ def main() -> None:
     ap.add_argument("--model", default=VL)
     ap.add_argument("--port", type=int, default=8100)
     ap.add_argument("--url-file", default=str(Path(__file__).resolve().parents[1] / "data" / "db" / "model_server.url"))
+    ap.add_argument("--pca-file", default=str(Path(__file__).resolve().parents[1] / "data" / "db" / "pca64.npz"))
+    ap.add_argument("--pca-source", default=str(NLA_ROOT / "results" / "data" / "vgreg_V.npy"))
     a = ap.parse_args()
 
     t0 = time.time()
+    pca = load_or_fit_pca(Path(a.pca_file), Path(a.pca_source))
+    print(f"pca basis: {pca[3] if pca else 'none (will fit per image)'} ({time.time() - t0:.0f}s)", flush=True)
+    t0 = time.time()
     print(f"loading {a.model} ...", flush=True)
-    model = Model(a.model)
+    model = Model(a.model, pca=pca)
     print(f"loaded in {time.time() - t0:.0f}s on {model.model.device}", flush=True)
 
     url = f"http://{socket.gethostname()}:{a.port}"

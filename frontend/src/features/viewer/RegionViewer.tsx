@@ -1,5 +1,6 @@
-import { useLayoutEffect, useRef, useState } from "react";
+import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { TransformComponent, TransformWrapper } from "react-zoom-pan-pinch";
+import type { ReactZoomPanPinchRef } from "react-zoom-pan-pinch";
 import { useDataSource } from "../../api/source";
 import { BoxTool } from "../annotate/BoxTool";
 import type { ViewerProps } from "./types";
@@ -30,12 +31,18 @@ export function RegionViewer({ sample, condition, annotations, tool, showRegion,
   const [w, h] = sample.image_size ?? [500, 334];
   const [bx, by, bw, bh] = sample.box;
   const { ref, size } = useFit(w, h);
+  const zoom = useRef<ReactZoomPanPinchRef>(null);
+  // When the frame is refitted (window or panel resized), re-centre instead of remounting the zoom state.
+  useEffect(() => {
+    zoom.current?.resetTransform(0);
+  }, [size.width, size.height]);
   const fontSize = Math.max(11, w / 40);
 
   return (
     <div className={`viewer tool-${tool}`} ref={ref}>
       <TransformWrapper
-        key={`${sample.id}:${Math.round(size.width)}`}
+        key={sample.id}
+        ref={zoom}
         minScale={0.5}
         maxScale={12}
         centerOnInit

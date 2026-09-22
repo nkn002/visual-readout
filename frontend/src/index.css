@@ -205,11 +205,13 @@ details summary { cursor: pointer; color: var(--muted); font-size: 13px; }
 .lbl .editing { font: inherit; padding: 1px 4px; border: 1px solid var(--accent); border-radius: 3px; background: var(--surface); color: inherit; width: 100%; }
 
 .overlay .heat rect.pooled { fill: rgba(255, 255, 255, 0.12); stroke: #fff; stroke-width: 1.2; vector-effect: non-scaling-stroke; pointer-events: none; }
-.subwindow { border-top: 1px solid var(--line); background: var(--surface); padding: 10px 14px 12px; max-height: 46%; overflow: auto; }
+.subwindow { border-top: 1px solid var(--line); background: var(--surface); padding: 10px 14px 12px; max-height: 55%; overflow: auto; }
 .subwindow header { display: flex; align-items: baseline; gap: 8px; font-size: 13px; }
 .subwindow header .hide { margin-left: auto; border: 0; background: none; color: var(--muted); font-size: 18px; padding: 0 4px; }
 .subwindow .vec { display: grid; grid-template-columns: minmax(0, 1fr) 220px; gap: 16px; margin-top: 8px; }
-.subwindow canvas { width: 100%; max-width: 640px; display: block; image-rendering: pixelated; border: 1px solid var(--line); border-radius: 3px; }
+.subwindow .cells { display: grid; gap: 2px; max-width: 360px; }
+.subwindow .cell { aspect-ratio: 1; border-radius: 2px; display: grid; place-items: center; font: 10px ui-monospace, monospace; color: rgba(0, 0, 0, 0.45); cursor: default; }
+.subwindow .cell.hot { outline: 2px solid var(--ink); outline-offset: -2px; }
 .subwindow .axis { display: flex; align-items: center; gap: 8px; font-size: 11px; color: var(--muted); margin-top: 4px; }
 .subwindow .colorbar { flex: 1; max-width: 200px; height: 8px; border-radius: 2px; background: linear-gradient(90deg, rgb(55, 75, 255), #fff, rgb(255, 65, 40)); }
 .subwindow .kv { align-content: start; }

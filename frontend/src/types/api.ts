@@ -74,9 +74,12 @@ export interface AnnotationUpdate {
 
 export interface ActivationVector {
   layer: number;
-  dim: number;
-  vector: number[]; // the region's activation: mean of the pooled tokens' hidden states
-  norm: number;
+  dim: number; // size of the full pooled vector (3584 for Qwen2.5-VL-7B)
+  reduced: number[]; // the pooled vector projected onto 64 principal components
+  explained: number[]; // variance ratio each component explains
+  basis: string; // how the components were fitted
+  norm: number; // L2 norm of the full pooled vector
+  top: { dim: number; value: number }[]; // the 8 largest full dimensions
   region_tokens: number[]; // flat indices (row-major on rows x cols) of the tokens that were pooled
   rows: number;
   cols: number;
