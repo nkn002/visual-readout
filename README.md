@@ -20,7 +20,7 @@ The research behind the data maps Qwen2.5-VL region activations into a frozen te
 | Zoom and pan the image, **Fit view** to undo | `frontend/src/features/viewer/RegionViewer.tsx` |
 | **Annotation:** drag to draw a labelled region; rename it any time by clicking its label; delete one or clear all; export and import as JSON | `frontend/src/features/annotate/BoxTool.tsx`, `Inspector.tsx` |
 | **Ask Qwen2.5-VL** what a drawn region contains | `backend/app/services/describe.py`, `scripts/model_server.py` |
-| **Activation heatmap** for a drawn region: mean-pool its tokens at the read-out layer (hidden state 21, output of layer 20) into one vector, as the research connector does, and colour every image token by its similarity to that vector | `scripts/model_server.py`, `backend/app/routers/activations.py`, `frontend/src/features/viewer/heat.ts` |
+| **Activation heatmap** of a drawn region: its tokens at the read-out layer (hidden state 21, output of layer 20) mean-pooled into one vector, as the research connector does, shown as a 56 × 64 heatmap of its 3584 dimensions in a panel under the image | `scripts/model_server.py`, `backend/app/routers/activations.py`, `frontend/src/features/viewer/ActivationPanel.tsx` |
 | **Default region:** reveal the dataset's box, its phrase, and the frozen verbalizer's read-out with the judge's verdict | `StageBar.tsx`, `Inspector.tsx` |
 | Give your own names-it / misses-it verdict on that read-out | `frontend/src/features/annotate/MentionTags.tsx` |
 | **Backend:** annotations persist in SQLite through a FastAPI service | `backend/app/` |
@@ -105,9 +105,9 @@ Static mode: not available; the button says it needs the backend.
 
 ### 4. Show a region's activation heatmap
 
-The user clicks **Activation heatmap** under a drawn region. The image is coloured by how much each image token resembles that region's read-out vector.
+The user clicks **Activation heatmap** under a drawn region. A panel opens under the image showing that region's activation vector as a heatmap.
 
-`Inspector.tsx` button → `apiSource.ts` sends `POST /api/samples/{id}/activations` with the box → `routers/activations.py` (cached after the first call) → `services/activations.py` sends the image and the box to `scripts/model_server.py` → the model server runs one forward pass of Qwen2.5-VL with hidden states, takes hidden state 21 (the output of layer 20, the read-out layer), selects the tokens under the box with the research code's own rule (`mmav.vgregions.box_to_tokens`, a token counts when the box covers half of it), mean-pools them into one vector exactly as the connector's input is built, and scores every image token by cosine similarity to that vector after subtracting the image's mean token → `RegionViewer.tsx` paints one translucent cell per token (colours span the 2nd to 98th percentile) and outlines the pooled tokens in white; the bar above the image shows which region, how many tokens were pooled, and the cosine range.
+`Inspector.tsx` button → `apiSource.ts` sends `POST /api/samples/{id}/activations` with the box → `routers/activations.py` (cached after the first call) → `services/activations.py` sends the image and the box to `scripts/model_server.py` → the model server runs one forward pass of Qwen2.5-VL with hidden states, takes hidden state 21 (the output of layer 20, the read-out layer), selects the tokens under the box with the research code's own rule (`mmav.vgregions.box_to_tokens`, a token counts when the box covers half of it), and mean-pools them into one 3584-dimensional vector, exactly the connector's input → `ActivationPanel.tsx` draws the vector as a 56 × 64 grid, one cell per dimension in row-major order, blue for negative and red for positive with the colour range at the 99th percentile of the magnitudes, plus the norm, mean, standard deviation, and the eight largest dimensions; hovering a cell shows its index and value. `RegionViewer.tsx` outlines the pooled tokens on the image.
 
 Static mode: not available; the button says it needs the backend.
 

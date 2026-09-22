@@ -132,9 +132,9 @@ def test_activations_without_and_with_fake_model_server(client, monkeypatch):
     assert client.post("/api/samples/cf-00/activations", json={"geometry": {"type": "point", "x": 0.1, "y": 0.1}}).status_code == 422
     monkeypatch.setattr(dsvc, "model_url", lambda settings: "http://fake:1")
     monkeypatch.setattr(svc, "fetch_grid", lambda path, b, layer, url, key=None: {
-        "layer": layer, "rows": 2, "cols": 3, "values": [0.1, 0.9, 0.2, 0.3, 0.8, 0.1], "region_tokens": [1, 4],
-        "stat": "cosine", "pooling": "fake", "model": "fake"})
+        "layer": layer, "dim": 4, "vector": [0.1, -0.9, 0.2, 0.3], "norm": 0.98, "region_tokens": [1, 4],
+        "rows": 2, "cols": 3, "pooling": "fake", "model": "fake"})
     r = client.post("/api/samples/cf-00/activations", json={"geometry": box, "layer": 21})
     assert r.status_code == 200, r.text
     g = r.json()
-    assert g["rows"] * g["cols"] == len(g["values"]) == 6 and g["region_tokens"] == [1, 4] and g["layer"] == 21
+    assert g["dim"] == len(g["vector"]) == 4 and g["region_tokens"] == [1, 4] and g["layer"] == 21

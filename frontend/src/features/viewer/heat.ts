@@ -1,28 +1,27 @@
-import type { ActivationGrid } from "../../types/api";
-
-// Five-stop "inferno"-like ramp, dark to bright.
-const STOPS: [number, number, number][] = [
-  [0, 0, 4],
-  [66, 10, 104],
-  [147, 38, 103],
-  [221, 81, 58],
-  [252, 165, 10],
-  [252, 255, 164],
-];
-
-export function colorAt(t: number): string {
-  const x = Math.min(1, Math.max(0, t)) * (STOPS.length - 1);
-  const i = Math.min(STOPS.length - 2, Math.floor(x));
-  const f = x - i;
-  const c = STOPS[i].map((a, k) => Math.round(a + (STOPS[i + 1][k] - a) * f));
-  return `rgb(${c[0]}, ${c[1]}, ${c[2]})`;
+// Diverging blue-white-red ramp for a signed vector, centred at zero.
+export function diverging(t: number): string {
+  const x = Math.min(1, Math.max(-1, t));
+  if (x < 0) {
+    const a = -x;
+    return `rgb(${Math.round(255 - 200 * a)}, ${Math.round(255 - 180 * a)}, 255)`;
+  }
+  return `rgb(255, ${Math.round(255 - 190 * x)}, ${Math.round(255 - 215 * x)})`;
 }
 
-/** Normalise values to 0..1 between the 2nd and 98th percentile, so one attention-sink token does not flatten the rest. */
-export function normalise(g: ActivationGrid): { t: number[]; lo: number; hi: number } {
-  const sorted = [...g.values].sort((a, b) => a - b);
-  const q = (p: number) => sorted[Math.min(sorted.length - 1, Math.max(0, Math.round(p * (sorted.length - 1))))];
-  const lo = q(0.02);
-  const hi = Math.max(q(0.98), lo + 1e-9);
-  return { t: g.values.map((v) => (v - lo) / (hi - lo)), lo, hi };
+/** Symmetric colour range: the 99th percentile of |v|, so a few huge dimensions do not hide the rest. */
+export function symmetricRange(v: number[]): number {
+  const abs = v.map(Math.abs).sort((a, b) => a - b);
+  return Math.max(abs[Math.min(abs.length - 1, Math.round(0.99 * (abs.length - 1)))], 1e-9);
+}
+
+/** Grid shape for `dim` cells: as close to 4:3 as the divisors allow (3584 -> 56 x 64). */
+export function gridShape(dim: number): { rows: number; cols: number } {
+  let best = { rows: 1, cols: dim };
+  for (let r = 1; r * r <= dim; r++) {
+    if (dim % r === 0) {
+      const c = dim / r;
+      if (Math.abs(c / r - 4 / 3) < Math.abs(best.cols / best.rows - 4 / 3)) best = { rows: r, cols: c };
+    }
+  }
+  return best;
 }

@@ -10,11 +10,11 @@ API (JSON):
     POST /describe            {"images": ["<base64 jpeg/png>", ...], "prompt": "...", "max_new_tokens": 96}
                               -> {"text": "...", "model": "...", "seconds": 1.2}
     POST /activations         {"image": "<base64>", "box": {"x","y","w","h"} (0..1), "layer": 21}
-                              -> {"layer", "rows", "cols", "values": [...], "region_tokens": [...], "stat"}
-                              The tokens under the box are mean-pooled into one vector, exactly as the
-                              research connector does (mmav.vgregions.box_to_tokens, 50% cover), and each
-                              image token gets its cosine similarity to that vector after subtracting the
-                              image's mean token. hidden_states[21] is the read-out layer L20.
+                              -> {"layer", "dim", "vector": [...], "norm", "region_tokens": [...], "rows", "cols"}
+                              The region's activation: the tokens under the box, chosen with the research
+                              repo's rule (mmav.vgregions.box_to_tokens, 50% cover), mean-pooled at
+                              hidden_states[layer] into one vector, exactly the connector's input.
+                              hidden_states[21] is the read-out layer L20.
 
 On start it writes its URL to --url-file (default data/db/model_server.url) so the backend finds it.
 Loading and prompting follow mmav.donor.load_vl in the nla repo: bf16, device_map cuda, chat template
@@ -104,8 +104,7 @@ class Model:
         return self.proc.batch_decode(out[:, inp.input_ids.shape[1] :], skip_special_tokens=True)[0].strip()
 
     def activations(self, image, box: dict, layer: int = 21, prompt: str = "Describe this image.") -> dict:
-        """Region heatmap: mean-pool the tokens under `box` (normalised 0..1) at hidden_states[layer] into one
-        vector, then score every image token by cosine to it, both mean-centred over the image's tokens."""
+        """The region's activation vector: mean-pool the tokens under `box` (normalised 0..1) at hidden_states[layer]."""
         content = [{"type": "image", "image": image}, {"type": "text", "text": prompt}]
         text = self.proc.apply_chat_template([{"role": "user", "content": content}], tokenize=False, add_generation_prompt=True)
         inp = self.proc(text=[text], images=[image], padding=True, return_tensors="pt").to(self.model.device)
@@ -124,14 +123,11 @@ class Model:
         idx, frac = BOX_TO_TOKENS(px, grid_thw, (ow, oh))
         idx = [int(i) for i in idx]
         region = toks[idx].mean(dim=0)  # the connector's input: one mean-pooled vector
-        centre = toks.mean(dim=0)
-        t_c = toks - centre
-        r_c = region - centre
-        cos = self.torch.nn.functional.cosine_similarity(t_c, r_c.unsqueeze(0), dim=-1)
         return {
-            "layer": layer, "rows": rows, "cols": cols,
-            "values": cos.cpu().tolist(), "region_tokens": idx, "grid_frac": float(frac),
-            "region_norm": float(region.norm()), "stat": "cosine to the region's mean-pooled vector, mean-centred",
+            "layer": layer, "dim": int(region.shape[0]),
+            "vector": [round(float(x), 4) for x in region.cpu().tolist()],
+            "norm": float(region.norm()),
+            "region_tokens": idx, "rows": rows, "cols": cols, "grid_frac": float(frac),
             "pooling": BOX_TO_TOKENS_SRC, "n_layers": len(out.hidden_states) - 1,
         }
 

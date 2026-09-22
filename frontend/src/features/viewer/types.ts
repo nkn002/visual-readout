@@ -1,4 +1,4 @@
-import type { ActivationGrid, Annotation, AnnotationCreate, ConditionKey, Dataset, Sample } from "../../types/api";
+import type { ActivationVector, Annotation, AnnotationCreate, ConditionKey, Dataset, Sample } from "../../types/api";
 import type { Tool } from "../../stores/viewerStore";
 
 /** Every data type's viewer takes these props; the registry picks the component by dataset.kind. */
@@ -10,6 +10,6 @@ export interface ViewerProps {
   tool: Tool;
   showRegion: boolean;
   draftLabel: string;
-  heat: ActivationGrid | null; // drawn over the image when present
+  heat: ActivationVector | null; // when present, the pooled tokens are outlined on the image
   onCreate(a: AnnotationCreate): void;
 }

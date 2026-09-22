@@ -72,13 +72,14 @@ export interface AnnotationUpdate {
   note?: string;
 }
 
-export interface ActivationGrid {
+export interface ActivationVector {
   layer: number;
+  dim: number;
+  vector: number[]; // the region's activation: mean of the pooled tokens' hidden states
+  norm: number;
+  region_tokens: number[]; // flat indices (row-major on rows x cols) of the tokens that were pooled
   rows: number;
   cols: number;
-  values: number[]; // row-major, one per image token: cosine to the region's mean-pooled vector
-  region_tokens: number[]; // flat indices of the tokens that were pooled
-  stat: string;
   pooling?: string | null;
   model?: string | null;
 }

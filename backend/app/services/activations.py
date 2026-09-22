@@ -1,4 +1,4 @@
-"""Region activation heatmaps from the model server, cached in memory per (sample, condition, layer, box)."""
+"""Region activation vectors from the model server, cached in memory per (sample, condition, layer, box)."""
 from __future__ import annotations
 
 import base64
@@ -24,7 +24,7 @@ def fetch_grid(image_path: str | Path, box: dict, layer: int, url: str, key: Key
     r = httpx.post(f"{url}/activations", json=body, timeout=180)
     r.raise_for_status()
     grid = r.json()
-    out = {k: grid.get(k) for k in ("layer", "rows", "cols", "values", "region_tokens", "stat", "pooling", "model")}
+    out = {k: grid.get(k) for k in ("layer", "dim", "vector", "norm", "region_tokens", "rows", "cols", "pooling", "model")}
     if key is not None:
         _cache[key] = out
     return out

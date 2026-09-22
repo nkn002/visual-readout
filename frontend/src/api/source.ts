@@ -1,5 +1,5 @@
 import { useMemo } from "react";
-import type { ActivationGrid, Annotation, AnnotationCreate, AnnotationUpdate, ConditionKey, Dataset, Geometry, Page, Sample } from "../types/api";
+import type { ActivationVector, Annotation, AnnotationCreate, AnnotationUpdate, ConditionKey, Dataset, Geometry, Page, Sample } from "../types/api";
 import { useSettings } from "../stores/settingsStore";
 import { staticSource } from "./staticSource";
 import { ApiSource } from "./apiSource";
@@ -19,8 +19,8 @@ export interface DataSource {
   importAnnotations(list: Annotation[]): Promise<number>;
   /** Ask the vision model what a box contains; the answer comes back as a `model` annotation. */
   describeRegion(sampleId: string, geometry: Geometry): Promise<Annotation>;
-  /** Region heatmap: tokens under the box mean-pooled at hidden_states[layer] (21 = the read-out layer), every token scored against it. */
-  getActivations(sampleId: string, geometry: Geometry, layer: number): Promise<ActivationGrid>;
+  /** The region's activation: tokens under the box mean-pooled at hidden_states[layer] (21 = the read-out layer). */
+  getActivations(sampleId: string, geometry: Geometry, layer: number): Promise<ActivationVector>;
 }
 
 export function useDataSource(): DataSource {

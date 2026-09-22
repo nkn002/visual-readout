@@ -204,11 +204,17 @@ details summary { cursor: pointer; color: var(--muted); font-size: 13px; }
 .lbl .editable:hover { border-bottom-color: var(--accent); }
 .lbl .editing { font: inherit; padding: 1px 4px; border: 1px solid var(--accent); border-radius: 3px; background: var(--surface); color: inherit; width: 100%; }
 
-.overlay .heat rect { opacity: 0.55; pointer-events: none; }
-.overlay .heat rect.pooled { fill: none; opacity: 1; stroke: #fff; stroke-width: 1.5; vector-effect: non-scaling-stroke; }
-.heatinfo { display: inline-flex; align-items: center; gap: 6px; font-size: 12px; color: var(--muted); margin-left: auto; }
-.heatinfo .bar { width: 60px; height: 10px; border-radius: 2px; background: linear-gradient(90deg, #000004, #420a68, #932667, #dd513a, #fca50a, #fcffa4); }
-.heatinfo .hide { border: 0; background: none; color: var(--muted); font-size: 16px; padding: 0 4px; }
+.overlay .heat rect.pooled { fill: rgba(255, 255, 255, 0.12); stroke: #fff; stroke-width: 1.2; vector-effect: non-scaling-stroke; pointer-events: none; }
+.subwindow { border-top: 1px solid var(--line); background: var(--surface); padding: 10px 14px 12px; max-height: 46%; overflow: auto; }
+.subwindow header { display: flex; align-items: baseline; gap: 8px; font-size: 13px; }
+.subwindow header .hide { margin-left: auto; border: 0; background: none; color: var(--muted); font-size: 18px; padding: 0 4px; }
+.subwindow .vec { display: grid; grid-template-columns: minmax(0, 1fr) 220px; gap: 16px; margin-top: 8px; }
+.subwindow canvas { width: 100%; max-width: 640px; display: block; image-rendering: pixelated; border: 1px solid var(--line); border-radius: 3px; }
+.subwindow .axis { display: flex; align-items: center; gap: 8px; font-size: 11px; color: var(--muted); margin-top: 4px; }
+.subwindow .colorbar { flex: 1; max-width: 200px; height: 8px; border-radius: 2px; background: linear-gradient(90deg, rgb(55, 75, 255), #fff, rgb(255, 65, 40)); }
+.subwindow .kv { align-content: start; }
+.subwindow .dim { display: inline-block; font: 11px ui-monospace, monospace; background: var(--bg); border-radius: 3px; padding: 1px 5px; margin: 0 4px 3px 0; }
+@media (max-width: 1000px) { .subwindow .vec { grid-template-columns: 1fr; } }
 .annlist .ask.heat.on { background: #932667; border-color: #932667; color: #fff; }
 .annlist li.region .row { flex-wrap: wrap; row-gap: 4px; }
 .annlist li.region .lbl { flex: 1 1 140px; }

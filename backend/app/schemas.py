@@ -89,12 +89,13 @@ class ActivationRequest(SQLModel):
     condition: str = "orig"
 
 
-class ActivationGrid(SQLModel):
+class ActivationVector(SQLModel):
     layer: int
+    dim: int
+    vector: list[float]  # the region's activation: mean of the pooled tokens' hidden states
+    norm: float
+    region_tokens: list[int]  # flat indices (row-major on rows x cols) of the tokens that were pooled
     rows: int
     cols: int
-    values: list[float]  # row-major, one per image token: cosine to the region's mean-pooled vector
-    region_tokens: list[int]  # flat indices of the tokens that were pooled
-    stat: str
     pooling: str | None = None
     model: str | None = None

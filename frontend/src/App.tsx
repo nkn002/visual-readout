@@ -1,6 +1,6 @@
 import { useEffect } from "react";
 import { useActivations, useAnnotations, useCreateAnnotation, useDatasets, useDeleteAnnotation, useSamples } from "./api/hooks";
-import { normalise } from "./features/viewer/heat";
+import { ActivationPanel } from "./features/viewer/ActivationPanel";
 import { Header } from "./components/Header";
 import { Inspector } from "./components/Inspector";
 import { SampleList } from "./components/SampleList";
@@ -80,25 +80,7 @@ export default function App() {
       <main className="panes">
         <SampleList samples={list} loading={samples.isPending} selectedId={v.selectedId} onSelect={v.select} />
         <section className="stage" aria-label="Viewer">
-          <StageBar
-            tool={v.tool}
-            setTool={v.setTool}
-            showRegion={v.showRegion}
-            toggleRegion={v.toggleRegion}
-            hasRegion={!!sample}
-            heat={
-              heatRegion
-                ? {
-                    label: heatRegion.label,
-                    state: heat.isPending ? "loading" : heat.error ? "error" : "ready",
-                    error: heat.error ? (heat.error as Error).message : undefined,
-                    range: heat.data ? (({ lo, hi }) => ({ lo, hi }))(normalise(heat.data)) : undefined,
-                    tokens: heat.data?.region_tokens.length,
-                  }
-                : null
-            }
-            onHideHeat={() => v.setHeatRegion(null)}
-          />
+          <StageBar tool={v.tool} setTool={v.setTool} showRegion={v.showRegion} toggleRegion={v.toggleRegion} hasRegion={!!sample} />
           {sample && dataset ? (
             <Viewer
               sample={sample}
@@ -113,6 +95,15 @@ export default function App() {
             />
           ) : (
             <div className="empty">{datasets.isPending || samples.isPending ? "Loading…" : "Select a region"}</div>
+          )}
+          {heatRegion && (
+            <ActivationPanel
+              label={heatRegion.label}
+              state={heat.isPending ? "loading" : heat.error ? "error" : "ready"}
+              error={heat.error ? (heat.error as Error).message : undefined}
+              data={heat.data}
+              onClose={() => v.setHeatRegion(null)}
+            />
           )}
         </section>
         <Inspector

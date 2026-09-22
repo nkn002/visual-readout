@@ -1,4 +1,4 @@
-import type { ActivationGrid, Annotation, AnnotationCreate, AnnotationUpdate, ConditionKey, Dataset, Geometry, Manifest, Page, Sample } from "../types/api";
+import type { ActivationVector, Annotation, AnnotationCreate, AnnotationUpdate, ConditionKey, Dataset, Geometry, Manifest, Page, Sample } from "../types/api";
 import type { DataSource } from "./source";
 import { newId } from "./source";
 
@@ -85,8 +85,8 @@ export const staticSource: DataSource = {
   async describeRegion(_sampleId: string, _geometry: Geometry): Promise<Annotation> {
     throw new Error("Asking the model needs the backend. Open Settings and switch to Backend.");
   },
-  async getActivations(_sampleId: string, _geometry: Geometry, _layer: number): Promise<ActivationGrid> {
-    throw new Error("The activation heatmap needs the backend. Open Settings and switch to Backend.");
+  async getActivations(_sampleId: string, _geometry: Geometry, _layer: number): Promise<ActivationVector> {
+    throw new Error("The activation vector needs the backend. Open Settings and switch to Backend.");
   },
   async importAnnotations(list: Annotation[]): Promise<number> {
     const have = new Set(readAll().map((a) => a.id));
