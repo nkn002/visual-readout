@@ -22,6 +22,7 @@ class Settings(BaseSettings):
     # trained region classifier (HW2): checkpoint folder and the folder holding training/model.py
     classifier_dir: Path = REPO_ROOT / "backend" / "model"
     training_dir: Path = REPO_ROOT / "training"
+    train_data: Path = REPO_ROOT / "data" / "raw" / "regions20.npz"  # built by training/prepare_data.py
     anthropic_api_key: str | None = None  # falls back to the SDK's own resolution (env, ant auth profile)
     describe_model: str = "claude-opus-5"
 

@@ -15,6 +15,25 @@ class ClassifierUnavailable(RuntimeError):
     pass
 
 
+# A model trained in the app can replace the shipped one for Predict, in memory only. mlp.pt is never overwritten.
+_override: dict | None = None
+
+
+def set_override(model, classes: list[str], label: str) -> None:
+    global _override
+    model.eval()
+    _override = {"model": model, "classes": classes, "label": label}
+
+
+def clear_override() -> None:
+    global _override
+    _override = None
+
+
+def override_label() -> str | None:
+    return _override["label"] if _override else None
+
+
 @lru_cache
 def load():
     """(model, checkpoint dict). Raises ClassifierUnavailable when torch or the checkpoint is missing."""
@@ -33,6 +52,10 @@ def load():
 
 
 def info() -> dict:
+    if _override:
+        c = _override["model"].config
+        return {"name": _override["label"], "hidden": c["hidden"], "activation": c["activation"], "dropout": c["dropout"],
+                "classes": _override["classes"], "test_acc": None}
     _, ckpt = load()
     c = ckpt["config"]
     return {"name": "MLP", "hidden": c["hidden"], "activation": c["activation"], "dropout": c["dropout"],
@@ -43,8 +66,12 @@ def predict(vector: list[float], k: int = 5) -> list[dict]:
     """Top-k classes with softmax probabilities for one 3584-d region vector."""
     import torch
 
-    model, ckpt = load()
+    if _override:
+        model, classes = _override["model"], _override["classes"]
+    else:
+        model, ckpt = load()
+        classes = ckpt["classes"]
     with torch.no_grad():
         p = torch.softmax(model(torch.tensor([vector], dtype=torch.float32)), dim=1)[0]
     top = p.topk(min(k, len(p)))
-    return [{"label": ckpt["classes"][i], "prob": round(float(v), 4)} for v, i in zip(top.values.tolist(), top.indices.tolist())]
+    return [{"label": classes[i], "prob": round(float(v), 4)} for v, i in zip(top.values.tolist(), top.indices.tolist())]

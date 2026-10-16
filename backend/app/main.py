@@ -9,7 +9,7 @@ from sqlmodel import Session
 
 from .config import get_settings
 from .database import get_engine, init_db
-from .routers import activations, annotations, datasets, describe, health, predict, samples
+from .routers import activations, annotations, datasets, describe, health, predict, samples, train
 from .services.indexer import index
 
 
@@ -25,7 +25,7 @@ async def lifespan(app: FastAPI):
 def create_app() -> FastAPI:
     app = FastAPI(title="visual-readout API", version="0.1.0", lifespan=lifespan)
     app.add_middleware(CORSMiddleware, allow_origins=get_settings().origins, allow_methods=["*"], allow_headers=["*"])
-    for r in (health, datasets, samples, annotations, describe, activations, predict):
+    for r in (health, datasets, samples, annotations, describe, activations, predict, train):
         app.include_router(r.router)
     return app
 

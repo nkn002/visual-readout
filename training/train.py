@@ -59,7 +59,9 @@ def evaluate(model: MLP, X: torch.Tensor, y: torch.Tensor, n_classes: int) -> di
     return {"loss": loss, "acc": (pred == y).float().mean().item(), "top5": top5, "macro_f1": float(np.mean(f1s)), "recall_per_class": recalls}
 
 
-def train_one(cfg: dict, data: dict, n_classes: int, device, log=print) -> tuple[MLP, list[dict]]:
+def train_one(cfg: dict, data: dict, n_classes: int, device, log=print, on_epoch=None, should_stop=None) -> tuple[MLP, list[dict]]:
+    """Train one configuration. `on_epoch(row)` receives each epoch's metrics as it finishes (the app's live
+    monitor uses it); `should_stop()` returning True ends training after the current epoch (the app's Cancel)."""
     torch.manual_seed(SEED)
     Xtr, ytr = data["train"]
     Xva, yva = data["val"]
@@ -85,12 +87,16 @@ def train_one(cfg: dict, data: dict, n_classes: int, device, log=print) -> tuple
         va = evaluate(model, Xva, yva, n_classes)
         history.append({"epoch": epoch, "train_loss": tr["loss"], "val_loss": va["loss"], "train_acc": tr["acc"], "val_acc": va["acc"], "batch_loss": total / seen})
         log(f"    epoch {epoch:3d}  train loss {tr['loss']:.4f} acc {tr['acc']:.3f} | val loss {va['loss']:.4f} acc {va['acc']:.3f}")
+        if on_epoch is not None:
+            on_epoch(history[-1])
         if va["loss"] < best - 1e-4:
             best, best_state, bad = va["loss"], copy.deepcopy(model.state_dict()), 0
         else:
             bad += 1
             if bad >= cfg["patience"]:
                 break
+        if should_stop is not None and should_stop():
+            break
     model.load_state_dict(best_state)  # 7. keep the epoch with the lowest validation loss
     return model, history
 

@@ -167,3 +167,43 @@ def test_predict_with_trained_model(client, monkeypatch):
     assert len(probs) == 5 and probs == sorted(probs, reverse=True) and 0 < sum(probs) <= 1.0001
     assert body["n_tokens"] == 3 and body["model"]["name"] == "MLP"
     assert client.post("/api/samples/cf-03/predict", json={"geometry": {"type": "point", "x": 0.1, "y": 0.1}}).status_code == 422
+
+
+def test_interactive_training_on_a_tiny_split(client, tmp_path, monkeypatch):
+    import time
+
+    import numpy as np
+    import pytest
+
+    pytest.importorskip("torch")
+    from app.config import get_settings
+    from app.services import classifier
+
+    try:
+        classifier.load()
+    except classifier.ClassifierUnavailable as e:
+        pytest.skip(str(e))
+    rng = np.random.default_rng(0)
+    n, d = 240, 3584
+    y = rng.integers(0, 20, n)
+    X = (rng.normal(0, 1, (n, d)) + y[:, None] * 0.05).astype(np.float16)
+    split = np.array([0] * 160 + [1] * 40 + [2] * 40, dtype=np.int8)
+    path = tmp_path / "tiny.npz"
+    np.savez(path, X=X, y=y, split=split, phrase=np.array([f"phrase {i}" for i in range(n)]))
+    monkeypatch.setattr(get_settings(), "train_data", path)
+
+    r = client.post("/api/train", json={"epochs": 2, "hidden": [16], "n_train": 160, "batch_size": 32, "patience": 5})
+    assert r.status_code == 200, r.text
+    job = r.json()["id"]
+    for _ in range(300):
+        snap = client.get(f"/api/train/{job}").json()
+        if snap["status"] not in ("queued", "running"):
+            break
+        time.sleep(0.1)
+    assert snap["status"] == "done", snap
+    assert [row["epoch"] for row in snap["rows"]] == [1, 2]
+    assert set(snap["result"]["metrics"]) == {"train", "val", "test"} and len(snap["result"]["examples"]) == 8
+    assert client.post(f"/api/train/{job}/use").json()["in_use"].endswith(f"({job})")
+    assert classifier.info()["hidden"] == [16]
+    assert client.post("/api/train/reset-model").json()["in_use"] is None
+    assert client.post("/api/train", json={"activation": "softplus"}).status_code == 422

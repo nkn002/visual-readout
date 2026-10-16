@@ -113,3 +113,15 @@ class PredictResult(SQLModel):
     top: list[dict[str, Any]]  # [{label, prob}], highest first
     model: dict[str, Any]  # name, hidden sizes, activation, test accuracy
     n_tokens: int  # how many image tokens were mean-pooled into the input vector
+
+
+class TrainRequest(SQLModel):
+    lr: float = 3e-4
+    epochs: int = 15
+    hidden: list[int] = [512]  # [] = softmax regression; two numbers = two hidden layers
+    activation: str = "relu"
+    dropout: float = 0.5
+    weight_decay: float = 1e-4
+    batch_size: int = 256
+    n_train: int = 8000  # training regions to use; fewer train faster on CPU
+    patience: int = 5  # early stopping on validation loss
