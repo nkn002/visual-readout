@@ -111,3 +111,16 @@ export function usePredictRegion(sampleId: string | undefined) {
   const src = useDataSource();
   return useMutation({ mutationFn: (geometry: Geometry) => src.predictRegion(sampleId!, geometry) });
 }
+
+/** Poll a training run once a second while it is queued or running. */
+export function useTrainingRun(id: string | null) {
+  const src = useDataSource();
+  const key = useSourceKey();
+  return useQuery({
+    queryKey: ["training", key, id],
+    queryFn: () => src.getTraining(id!),
+    enabled: !!id,
+    retry: false,
+    refetchInterval: (q) => (q.state.data && !["queued", "running"].includes(q.state.data.status) ? false : 1000),
+  });
+}

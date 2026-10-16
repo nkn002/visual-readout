@@ -123,3 +123,24 @@ export interface ModelReport {
   }>;
   test_gap_mlp_minus_softmax: { mean: number; ci95: [number, number]; n: number };
 }
+
+// ---- HW2 optional: interactive training ----
+export interface TrainConfig {
+  lr: number; epochs: number; hidden: number[]; activation: string; dropout: number;
+  weight_decay: number; batch_size: number; n_train: number; patience: number;
+}
+export interface TrainSnapshot {
+  id: string;
+  status: "queued" | "running" | "done" | "cancelled" | "error";
+  config: TrainConfig;
+  rows: EpochRow[];
+  result: null | {
+    metrics: Record<"train" | "val" | "test", SplitMetrics>;
+    examples: { phrase: string | null; true: string; pred: string; prob: number }[];
+    n_train: number; params: number; epochs_run: number;
+  };
+  error: string | null;
+  elapsed: number;
+  in_use: boolean;
+  stopping?: boolean;
+}

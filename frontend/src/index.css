@@ -252,3 +252,18 @@ table.metrics th, table.metrics td { text-align: right; padding: 5px 8px; border
 table.metrics th:first-child, table.metrics td:first-child { text-align: left; }
 table.metrics th { font-size: 11px; text-transform: uppercase; letter-spacing: 0.05em; color: var(--muted); }
 table.metrics tr.ours td { font-weight: 600; }
+
+/* HW2 optional: the Train panel */
+.trainform { display: grid; grid-template-columns: repeat(auto-fit, minmax(170px, 1fr)); gap: 8px 14px; margin: 8px 0 10px; }
+.trainform label { display: flex; flex-direction: column; gap: 3px; font-size: 12px; color: var(--muted); }
+.trainform input, .trainform select { padding: 5px 7px; border: 1px solid var(--line); border-radius: 4px; background: var(--bg); color: var(--ink); font-size: 13px; }
+.trainform .row { grid-column: 1 / -1; }
+.panel .row button { border: 1px solid var(--line); background: var(--bg); border-radius: 4px; padding: 6px 12px; }
+.panel .row button.primary { background: var(--accent); border-color: var(--accent); color: #fff; }
+.panel .row button:disabled { opacity: 0.5; cursor: default; }
+.examples { list-style: none; padding: 0; margin: 4px 0 10px; display: grid; gap: 4px; font-size: 13px; }
+.examples li { display: grid; grid-template-columns: 18px minmax(0, 1fr) auto; gap: 8px; align-items: baseline; }
+.examples .mark { font-weight: 700; }
+.examples li.ok .mark { color: var(--yes); }
+.examples li.bad .mark { color: var(--no); }
+.examples .ph { color: var(--muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }

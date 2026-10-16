@@ -1,5 +1,5 @@
 import { useMemo } from "react";
-import type { ActivationVector, PredictResult, Annotation, AnnotationCreate, AnnotationUpdate, ConditionKey, Dataset, Geometry, Page, Sample } from "../types/api";
+import type { ActivationVector, PredictResult, TrainConfig, TrainSnapshot, Annotation, AnnotationCreate, AnnotationUpdate, ConditionKey, Dataset, Geometry, Page, Sample } from "../types/api";
 import { useSettings } from "../stores/settingsStore";
 import { staticSource } from "./staticSource";
 import { ApiSource } from "./apiSource";
@@ -23,6 +23,12 @@ export interface DataSource {
   getActivations(sampleId: string, geometry: Geometry, layer: number): Promise<ActivationVector>;
   /** HW2: classify a drawn region with the trained MLP (needs the backend and the GPU model server). */
   predictRegion(sampleId: string, geometry: Geometry): Promise<PredictResult>;
+  /** HW2 optional: train a classifier in the backend with chosen settings and watch it live. */
+  startTraining(cfg: TrainConfig): Promise<TrainSnapshot>;
+  getTraining(id: string): Promise<TrainSnapshot>;
+  cancelTraining(id: string): Promise<TrainSnapshot>;
+  useTrainedModel(id: string): Promise<{ in_use: string | null }>;
+  resetModel(): Promise<{ in_use: string | null }>;
 }
 
 export function useDataSource(): DataSource {

@@ -7,6 +7,7 @@ export function Header({ dataset }: { dataset: Dataset | undefined }) {
   const apiBase = useSettings((s) => s.apiBase);
   const open = useViewer((s) => s.setSettingsOpen);
   const openModel = useViewer((s) => s.setModelOpen);
+  const openTrain = useViewer((s) => s.setTrainOpen);
   return (
     <header className="topbar">
       <div className="brand">
@@ -24,6 +25,9 @@ export function Header({ dataset }: { dataset: Dataset | undefined }) {
         </button>
         <button type="button" className="mode model" onClick={() => openModel(true)} title="The trained region classifier: training curves and test results">
           Model
+        </button>
+        <button type="button" className="mode model" onClick={() => openTrain(true)} title="Train a classifier with your own settings and watch it learn">
+          Train
         </button>
         <a href="https://github.com/nkn002/visual-readout" target="_blank" rel="noreferrer">
           GitHub

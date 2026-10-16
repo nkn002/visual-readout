@@ -1,9 +1,10 @@
-import type { ActivationVector, PredictResult, Annotation, AnnotationCreate, AnnotationUpdate, ConditionKey, Dataset, Geometry, Manifest, Page, Sample } from "../types/api";
+import type { ActivationVector, PredictResult, TrainConfig, TrainSnapshot, Annotation, AnnotationCreate, AnnotationUpdate, ConditionKey, Dataset, Geometry, Manifest, Page, Sample } from "../types/api";
 import type { DataSource } from "./source";
 import { newId } from "./source";
 
 const BASE = import.meta.env.BASE_URL; // ends with "/"
 const KEY = "visual-readout:annotations";
+const NEEDS_BACKEND = "Training runs in the backend. Open Settings and switch to Backend.";
 
 let manifestPromise: Promise<Manifest> | null = null;
 function manifest(): Promise<Manifest> {
@@ -90,6 +91,21 @@ export const staticSource: DataSource = {
   },
   async predictRegion(_sampleId: string, _geometry: Geometry): Promise<PredictResult> {
     throw new Error("Predicting a drawn region needs the backend and the GPU model server. Open Settings and switch to Backend.");
+  },
+  async startTraining(_cfg: TrainConfig): Promise<TrainSnapshot> {
+    throw new Error(NEEDS_BACKEND);
+  },
+  async getTraining(_id: string): Promise<TrainSnapshot> {
+    throw new Error(NEEDS_BACKEND);
+  },
+  async cancelTraining(_id: string): Promise<TrainSnapshot> {
+    throw new Error(NEEDS_BACKEND);
+  },
+  async useTrainedModel(_id: string): Promise<{ in_use: string | null }> {
+    throw new Error(NEEDS_BACKEND);
+  },
+  async resetModel(): Promise<{ in_use: string | null }> {
+    throw new Error(NEEDS_BACKEND);
   },
   async importAnnotations(list: Annotation[]): Promise<number> {
     const have = new Set(readAll().map((a) => a.id));

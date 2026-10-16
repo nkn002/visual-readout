@@ -10,6 +10,7 @@ interface ViewerState {
   draftLabel: string;
   settingsOpen: boolean;
   modelOpen: boolean;
+  trainOpen: boolean;
   select(id: string | null): void;
   setTool(t: Tool): void;
   toggleRegion(): void;
@@ -18,6 +19,7 @@ interface ViewerState {
   setDraftLabel(s: string): void;
   setSettingsOpen(open: boolean): void;
   setModelOpen(open: boolean): void;
+  setTrainOpen(open: boolean): void;
 }
 
 export const useViewer = create<ViewerState>()((set) => ({
@@ -28,6 +30,7 @@ export const useViewer = create<ViewerState>()((set) => ({
   draftLabel: "",
   settingsOpen: false,
   modelOpen: false,
+  trainOpen: false,
   select: (selectedId) => set({ selectedId }),
   setTool: (tool) => set({ tool }),
   toggleRegion: () => set((s) => ({ showRegion: !s.showRegion })),
@@ -36,4 +39,5 @@ export const useViewer = create<ViewerState>()((set) => ({
   setDraftLabel: (draftLabel) => set({ draftLabel }),
   setSettingsOpen: (settingsOpen) => set({ settingsOpen }),
   setModelOpen: (modelOpen) => set({ modelOpen }),
+  setTrainOpen: (trainOpen) => set({ trainOpen }),
 }));

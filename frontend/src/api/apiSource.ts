@@ -1,4 +1,4 @@
-import type { ActivationVector, PredictResult, Annotation, AnnotationCreate, AnnotationUpdate, ConditionKey, Dataset, DescribeResult, Geometry, Health, Page, Sample } from "../types/api";
+import type { ActivationVector, PredictResult, TrainConfig, TrainSnapshot, Annotation, AnnotationCreate, AnnotationUpdate, ConditionKey, Dataset, DescribeResult, Geometry, Health, Page, Sample } from "../types/api";
 import type { DataSource } from "./source";
 
 export class ApiSource implements DataSource {
@@ -69,6 +69,21 @@ export class ApiSource implements DataSource {
   }
   predictRegion(sampleId: string, geometry: Geometry): Promise<PredictResult> {
     return this.req<PredictResult>(`/samples/${encodeURIComponent(sampleId)}/predict`, { method: "POST", body: JSON.stringify({ geometry }) });
+  }
+  startTraining(cfg: TrainConfig): Promise<TrainSnapshot> {
+    return this.req<TrainSnapshot>("/train", { method: "POST", body: JSON.stringify(cfg) });
+  }
+  getTraining(id: string): Promise<TrainSnapshot> {
+    return this.req<TrainSnapshot>(`/train/${encodeURIComponent(id)}`);
+  }
+  cancelTraining(id: string): Promise<TrainSnapshot> {
+    return this.req<TrainSnapshot>(`/train/${encodeURIComponent(id)}/cancel`, { method: "POST" });
+  }
+  useTrainedModel(id: string): Promise<{ in_use: string | null }> {
+    return this.req<{ in_use: string | null }>(`/train/${encodeURIComponent(id)}/use`, { method: "POST" });
+  }
+  resetModel(): Promise<{ in_use: string | null }> {
+    return this.req<{ in_use: string | null }>("/train/reset-model", { method: "POST" });
   }
   async importAnnotations(list: Annotation[]): Promise<number> {
     const r = await this.req<{ imported: number }>("/annotations/import", { method: "POST", body: JSON.stringify(list) });

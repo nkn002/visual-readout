@@ -71,7 +71,7 @@ class Job:
     def snapshot(self) -> dict:
         return {"id": self.id, "status": self.status, "config": self.config, "rows": list(self.rows),
                 "result": self.result, "error": self.error, "elapsed": round((self.finished or time.time()) - self.started, 1),
-                "in_use": classifier.override_label() == self.label()}
+                "in_use": classifier.override_label() == self.label(), "stopping": self.stop.is_set() and self.status == "running"}
 
     def label(self) -> str:
         return f"MLP trained in the app ({self.id})"

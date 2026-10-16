@@ -24,12 +24,14 @@ The research behind the data maps Qwen2.5-VL region activations into a frozen te
 | **Default region:** reveal the dataset's box, its phrase, and the frozen verbalizer's read-out with the judge's verdict | `StageBar.tsx`, `Inspector.tsx` |
 | Give your own names-it / misses-it verdict on that read-out | `frontend/src/features/annotate/MentionTags.tsx` |
 | **HW2, Predict:** a trained MLP classifies a drawn region into 20 object classes and shows the top 5 with probabilities | `training/`, `backend/app/routers/predict.py`, `Inspector.tsx` |
+| **HW2 optional, interactive training:** the **Train** button picks learning rate, epochs, hidden layers and units, activation, dropout, weight decay, batch size and training-set size, then trains in the backend | `frontend/src/components/TrainPanel.tsx`, `backend/app/routers/train.py`, `backend/app/services/trainer.py` |
+| **HW2 optional, training monitor:** the same panel draws train and validation loss and accuracy live, one point per epoch, then shows loss, accuracy, top-5 and macro-F1 on train, validation and test, plus predictions on random test regions; **Use this model for Predict** serves the new model until reset | `TrainPanel.tsx`, `LineChart.tsx` |
 | **HW2, model card:** the **Model** button shows the loss and accuracy curves, train/val/test scores against two baselines, and per-class recall | `frontend/src/components/ModelCard.tsx`, `backend/model/metrics.json` |
 | **Backend:** annotations persist in SQLite through a FastAPI service | `backend/app/` |
 | Two data modes behind one interface: static (GitHub Pages) or backend | `frontend/src/api/` |
 | Deploy to GitHub Pages on every push | `.github/workflows/pages.yml` |
 
-Implemented annotation: **yes**. Implemented backend/database: **yes** (SQLite via SQLModel; tables are created at startup, migrations are a follow-up). Model in the loop: **yes**, Qwen2.5-VL-7B-Instruct on a cluster GPU, prompted directly.
+Implemented annotation: **yes**. Implemented backend/database: **yes** (SQLite via SQLModel; tables are created at startup, migrations are a follow-up). Model in the loop: **yes**, Qwen2.5-VL-7B-Instruct on a cluster GPU, prompted directly. HW2 optional challenges: **interactive training: yes; training monitor: yes** (backend mode).
 
 ## Run it
 
@@ -64,7 +66,7 @@ The server writes its address to `data/db/model_server.url`; the backend reads t
 
 Docker, both services with hot reload: `docker compose up`, then open http://localhost:5173.
 
-Tests: `cd backend && .venv/bin/python -m pytest` (13 tests, including a prediction through the trained model; indexing, endpoints, annotation round trip, import, manifest validation, the model call against a stand-in server).
+Tests: `cd backend && .venv/bin/python -m pytest` (14 tests, including a prediction through the trained model and a 2-epoch in-app training run; indexing, endpoints, annotation round trip, import, manifest validation, the model call against a stand-in server).
 
 ## The repository, top down
 
@@ -152,6 +154,14 @@ The user clicks **Predict** under a drawn region. The trained MLP shows its five
 `Inspector.tsx` button → `apiSource.ts` sends `POST /api/samples/{id}/predict` with the box → `routers/predict.py` → the model server pools the tokens under the box at hidden state 21 → `services/classifier.py` runs the MLP from `backend/model/mlp.pt` → the top 5 classes return → `TopClasses.tsx` draws them as bars under the region. The **Model** button opens `ModelCard.tsx`, which reads `metrics.json` and shows the curves and test scores.
 
 Static mode: the default region's prediction and the model card work; predicting a drawn region needs the backend.
+
+### 10. Train a classifier and watch it learn (HW2 optional)
+
+The user clicks **Train**, picks the settings and starts a run. The loss and accuracy curves grow one point per epoch.
+
+`TrainPanel.tsx` → `apiSource.ts` sends `POST /api/train` with the settings → `routers/train.py` → `services/trainer.py` starts a thread that runs `train_one` from `training/train.py` on `data/raw/regions20.npz` → each finished epoch is appended to the run → the panel polls `GET /api/train/{id}` every second and redraws → when training ends, the panel shows train, validation and test scores and example predictions. **Use this model for Predict** calls `POST /api/train/{id}/use`, which makes `services/classifier.py` serve the new model until `POST /api/train/reset-model`.
+
+Static mode: not available; training needs the backend.
 
 ### Files behind every action
 
@@ -432,6 +442,12 @@ One disclosure about the test set: before the final grid, a smoke test (`--quick
 The user draws a box and clicks **Predict**. `Inspector.tsx` asks `apiSource.ts` to send `POST /api/samples/{id}/predict` with the box. `routers/predict.py` asks the model server (`scripts/model_server.py`, Qwen2.5-VL on a GPU) for the region's pooled vector at hidden state 21. `services/classifier.py` loads `backend/model/mlp.pt` once and runs the MLP on CPU. The browser receives the top 5 classes with their softmax probabilities and draws them as bars under the region.
 
 The 12 default regions already have vectors in the research data, so `training/predict_defaults.py` precomputes their predictions. The static GitHub Pages site shows those predictions and the model card without any server. Predicting a newly drawn region needs the backend and the GPU job.
+
+### Train in the app (optional challenges)
+
+**The Train panel runs the same `train_one` loop as `training/train.py`, in a background thread of the backend.** The loop reports each epoch through a callback, and the browser polls `GET /api/train/{id}` once a second to redraw the curves. **Stop** ends the run after the current epoch. The finished run reports loss, accuracy, top-5 and macro-F1 on train, validation and test, and shows eight random test regions with their true and predicted classes. **Use this model for Predict** swaps the served model in memory; `backend/model/mlp.pt` is never overwritten.
+
+**Training runs on the backend's CPU, so the panel offers a smaller training set.** On the cluster's one-CPU VS Code node, one epoch takes about 4 s on 4,000 regions and about 9 s on all 20,766. In-app training needs `data/raw/regions20.npz` from `training/prepare_data.py`, which is git-ignored.
 
 ### Reproduce
 
