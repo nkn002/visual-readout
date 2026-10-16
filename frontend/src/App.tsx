@@ -5,6 +5,7 @@ import { Header } from "./components/Header";
 import { Inspector } from "./components/Inspector";
 import { SampleList } from "./components/SampleList";
 import { SettingsPanel } from "./components/SettingsPanel";
+import { ModelCard } from "./components/ModelCard";
 import { StageBar } from "./components/StageBar";
 import { viewers } from "./features/viewer/registry";
 import { useSettings } from "./stores/settingsStore";
@@ -122,6 +123,7 @@ export default function App() {
         />
       </main>
       <SettingsPanel />
+      <ModelCard />
     </div>
   );
 }

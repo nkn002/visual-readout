@@ -18,6 +18,10 @@ class Settings(BaseSettings):
     # Qwen2.5-VL model server (scripts/model_server.py on a GPU node). If unset, the URL file the
     # server writes at startup (data/db/model_server.url) is read at request time.
     model_url: str | None = None
+    model_url_path: Path = REPO_ROOT / "data" / "db" / "model_server.url"
+    # trained region classifier (HW2): checkpoint folder and the folder holding training/model.py
+    classifier_dir: Path = REPO_ROOT / "backend" / "model"
+    training_dir: Path = REPO_ROOT / "training"
     anthropic_api_key: str | None = None  # falls back to the SDK's own resolution (env, ant auth profile)
     describe_model: str = "claude-opus-5"
 
@@ -37,7 +41,7 @@ class Settings(BaseSettings):
 
     @property
     def model_url_file(self) -> Path:
-        return REPO_ROOT / "data" / "db" / "model_server.url"
+        return self.model_url_path
 
     @property
     def origins(self) -> list[str]:

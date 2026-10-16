@@ -1,8 +1,9 @@
 import { useEffect, useRef, useState } from "react";
 import { useDataSource } from "../api/source";
-import { useDescribeRegion, useImportAnnotations, useUpdateAnnotation } from "../api/hooks";
+import { useDefaultPredictions, useDescribeRegion, useImportAnnotations, usePredictRegion, useUpdateAnnotation } from "../api/hooks";
+import { TopClasses } from "./TopClasses";
 import { MentionTags } from "../features/annotate/MentionTags";
-import type { Annotation, AnnotationCreate, Arm, ConditionKey, Dataset, Geometry, Sample, Verdict } from "../types/api";
+import type { Annotation, AnnotationCreate, Arm, ConditionKey, Dataset, Geometry, PredictResult, Sample, Verdict } from "../types/api";
 
 interface Props {
   sample: Sample | null;
@@ -87,6 +88,18 @@ export function Inspector(p: Props) {
   const importMut = useImportAnnotations();
   const describe = useDescribeRegion(sample?.id);
   const update = useUpdateAnnotation(sample?.id);
+  const predictMut = usePredictRegion(sample?.id);
+  const defaults = useDefaultPredictions();
+  const [preds, setPreds] = useState<Record<string, PredictResult | { error: string } | "loading">>({});
+  const predict = async (r: Annotation) => {
+    setPreds((m) => ({ ...m, [r.id]: "loading" }));
+    try {
+      const res = await predictMut.mutateAsync(r.geometry);
+      setPreds((m) => ({ ...m, [r.id]: res }));
+    } catch (e) {
+      setPreds((m) => ({ ...m, [r.id]: { error: (e as Error).message } }));
+    }
+  };
   const fileRef = useRef<HTMLInputElement>(null);
   const [status, setStatus] = useState<string>("");
   const [asking, setAsking] = useState<string | null>(null);
@@ -176,6 +189,9 @@ export function Inspector(p: Props) {
                 <button type="button" className="ask" disabled={asking !== null} onClick={() => void ask(a)} title="Send this region to Qwen2.5-VL and ask what it is">
                   {asking === a.id ? "Asking…" : "Ask Qwen2.5-VL"}
                 </button>
+                <button type="button" className="ask predict" disabled={preds[a.id] === "loading"} onClick={() => void predict(a)} title="Classify this region with the trained MLP (20 object classes)">
+                  {preds[a.id] === "loading" ? "Predicting…" : "Predict"}
+                </button>
                 <button
                   type="button"
                   className={`ask heat ${p.heatRegionId === a.id ? "on" : ""}`}
@@ -190,6 +206,17 @@ export function Inspector(p: Props) {
                 </button>
               </div>
               {askError?.id === a.id && <p className="err small">{askError.message}</p>}
+              {(() => {
+                const pr = preds[a.id];
+                if (!pr || pr === "loading") return null;
+                if ("error" in pr) return <p className="err small">{pr.error}</p>;
+                return (
+                  <div className="prediction">
+                    <span className="muted small">MLP prediction from {pr.n_tokens} pooled tokens</span>
+                    <TopClasses top={pr.top} />
+                  </div>
+                );
+              })()}
               {answersFor(a).map((m) => (
                 <div key={m.id} className="answer">
                   <span className="swatch model" />
@@ -237,6 +264,17 @@ export function Inspector(p: Props) {
               </article>
             )}
             {arm?.note && <p className="muted small">{arm.note}.</p>}
+            {defaults.data?.[sample.id] && (
+              <div className="prediction">
+                <span className="muted small">
+                  MLP prediction for this region.{" "}
+                  {defaults.data[sample.id].true_class
+                    ? `Label from the phrase: ${defaults.data[sample.id].true_class}.`
+                    : `The phrase's head noun "${defaults.data[sample.id].head}" is not one of the 20 classes.`}
+                </span>
+                <TopClasses top={defaults.data[sample.id].top} truth={defaults.data[sample.id].true_class} />
+              </div>
+            )}
           </>
         )}
       </section>

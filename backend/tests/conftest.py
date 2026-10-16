@@ -11,6 +11,8 @@ if _DB.exists():
     _DB.unlink()
 os.environ["DATABASE_URL"] = f"sqlite:///{_DB}"
 os.environ["DATA_DIR"] = str(REPO / "data" / "sample")
+os.environ["MODEL_URL"] = ""
+os.environ["MODEL_URL_PATH"] = str(_TMP / "no_model_server.url")  # never the real address file of a running job
 
 
 @pytest.fixture(scope="session")

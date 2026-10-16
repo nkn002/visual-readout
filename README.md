@@ -2,11 +2,11 @@
 
 A web viewer for one kind of research data: a photo, a region of that photo, and what a vision-language model says about that region.
 
-Live: **https://nkn002.github.io/visual-readout/** · DS7400 Deep Learning, Homework 1 · Author: Khai-Nguyen Nguyen
+Live: **https://nkn002.github.io/visual-readout/** · DS7400 Deep Learning, Homeworks 1 and 2 · Author: Khai-Nguyen Nguyen
 
 ## The goal
 
-A user opens an image, draws a region, and asks Qwen2.5-VL what is in it. A **Default region** button reveals the region the research dataset defined for that image and the text a verbalizer produced for it. Users can record their own verdicts and save everything. HW1 delivers that viewer; later homeworks add trained models on top of it.
+A user opens an image, draws a region, and asks Qwen2.5-VL what is in it. A **Default region** button reveals the region the research dataset defined for that image and the text a verbalizer produced for it. Users can record their own verdicts and save everything. HW1 delivered that viewer. HW2 adds a trained neural network: **Predict** classifies a drawn region into one of 20 object classes from Qwen2.5-VL's internal activation for that region.
 
 The research behind the data maps Qwen2.5-VL region activations into a frozen text verbalizer through a small trained connector. The viewer is the tool for looking at those regions and read-outs one at a time.
 
@@ -23,6 +23,8 @@ The research behind the data maps Qwen2.5-VL region activations into a frozen te
 | **Activation heatmap** of a drawn region: its tokens at the read-out layer (hidden state 21, output of layer 20) mean-pooled into one vector, as the research connector does, projected onto 64 principal components and shown as an 8 × 8 heatmap in a panel under the image | `scripts/model_server.py`, `backend/app/routers/activations.py`, `frontend/src/features/viewer/ActivationPanel.tsx` |
 | **Default region:** reveal the dataset's box, its phrase, and the frozen verbalizer's read-out with the judge's verdict | `StageBar.tsx`, `Inspector.tsx` |
 | Give your own names-it / misses-it verdict on that read-out | `frontend/src/features/annotate/MentionTags.tsx` |
+| **HW2, Predict:** a trained MLP classifies a drawn region into 20 object classes and shows the top 5 with probabilities | `training/`, `backend/app/routers/predict.py`, `Inspector.tsx` |
+| **HW2, model card:** the **Model** button shows the loss and accuracy curves, train/val/test scores against two baselines, and per-class recall | `frontend/src/components/ModelCard.tsx`, `backend/model/metrics.json` |
 | **Backend:** annotations persist in SQLite through a FastAPI service | `backend/app/` |
 | Two data modes behind one interface: static (GitHub Pages) or backend | `frontend/src/api/` |
 | Deploy to GitHub Pages on every push | `.github/workflows/pages.yml` |
@@ -60,7 +62,7 @@ The server writes its address to `data/db/model_server.url`; the backend reads t
 
 Docker, both services with hot reload: `docker compose up`, then open http://localhost:5173.
 
-Tests: `cd backend && .venv/bin/python -m pytest` (12 tests: indexing, endpoints, annotation round trip, import, manifest validation, the model call against a stand-in server).
+Tests: `cd backend && .venv/bin/python -m pytest` (13 tests, including a prediction through the trained model; indexing, endpoints, annotation round trip, import, manifest validation, the model call against a stand-in server).
 
 ## The repository, top down
 
@@ -141,6 +143,14 @@ The user opens Settings, picks a mode, and can test the connection.
 
 `SettingsPanel.tsx` writes the mode to `settingsStore.ts`; every later call goes to `apiSource.ts` or `staticSource.ts` accordingly. **Check connection** → `GET /api/health` → `routers/health.py` reports whether the API is up and whether the model server answers → the result is shown in the panel. `Header.tsx` shows the current mode.
 
+### 9. Predict what a region shows (HW2)
+
+The user clicks **Predict** under a drawn region. The trained MLP shows its five most likely object classes with probabilities.
+
+`Inspector.tsx` button → `apiSource.ts` sends `POST /api/samples/{id}/predict` with the box → `routers/predict.py` → the model server pools the tokens under the box at hidden state 21 → `services/classifier.py` runs the MLP from `backend/model/mlp.pt` → the top 5 classes return → `TopClasses.tsx` draws them as bars under the region. The **Model** button opens `ModelCard.tsx`, which reads `metrics.json` and shows the curves and test scores.
+
+Static mode: the default region's prediction and the model card work; predicting a drawn region needs the backend.
+
 ### Files behind every action
 
 - Frontend: `main.tsx` starts React. `App.tsx` lays out the panes and handles keyboard shortcuts. `api/hooks.ts` wraps every data call so the screen refreshes after a save. `api/source.ts` picks `apiSource.ts` or `staticSource.ts`. `stores/` holds the selected image, the tool, and the mode. `types/api.ts` holds the shapes of samples and annotations. `index.css` is all styling.
@@ -149,6 +159,7 @@ The user opens Settings, picks a mode, and can test the connection.
 ### Where the data comes from and how it runs
 
 - `data/sample/`: `manifest.json` (the 12 samples: boxes, phrases, read-outs, verdicts) and `images/`. Built once by `scripts/export_sample.py` from the research repository. `data/raw/` and `data/db/` are ignored by git.
+- `training/` holds the HW2 network and its pipeline: `prepare_data.py` builds the labelled split, `model.py` defines the MLP, `train.py` trains and evaluates it, `predict_defaults.py` precomputes the demo predictions, and `train.sbatch` runs training on a GPU.
 - `scripts/dev.sh` starts frontend and backend and prints the URLs. `scripts/model_server.sbatch` runs `scripts/model_server.py` on a GPU as a Slurm job. `compose.yml` runs frontend and backend in Docker.
 - `.github/workflows/pages.yml` deploys the frontend to `nkn002.github.io/visual-readout` on every push to `main`; `test.yml` runs the tests. `docs/DESIGN.md` records why it is built this way.
 
@@ -369,17 +380,83 @@ classDiagram
   Sample "1" --> "many" Annotation : has
 ```
 
+## HW2: the region classifier
+
+### What it predicts and why this model
+
+**The classifier names the object in a region from Qwen2.5-VL's activation alone.** Its input is the vector the research connector reads: Qwen2.5-VL-7B's hidden state 21 (the output of layer 20), mean-pooled over the image tokens under the box, 3,584 numbers. Its output is one of 20 object classes. This tests whether the activation the verbalizer reads holds the object's identity, which is the question the research asks.
+
+**A one-hidden-layer MLP is the smallest network the homework allows.** The architecture is 3584 → 512 → ReLU → dropout 0.5 → 20, with 1,845,780 parameters. The inputs are standardized with the training mean and standard deviation, which the checkpoint stores. Softmax regression, the same code with no hidden layer, is the shallow baseline.
+
+### Data
+
+- **Source.** The research repo's 200,000 Visual Genome region vectors (`results/data/vgreg_V.npy`) and their phrases (`vgreg_meta.jsonl`). They were extracted with the same prompt, layer, token rule and pooling the app uses. The app's vector for the same box matches the stored one at cosine 0.995 to 0.998 on four checked regions.
+- **Labels.** The head noun of each phrase (`mmav.site.head_noun`) maps to 20 classes through an explicit list in `training/prepare_data.py`. Plural stems are merged ("trees" and "tree" become tree). The people words (man, woman, boy, girl, people and others) are merged into person, and non-objects such as "part" are dropped. Each class is capped at 1,500 regions so "person" does not dominate.
+- **Split.** The split is by image, 80/10/10 with seed 0, so no photo has regions in two sets: 20,766 train, 2,555 validation and 2,488 test regions. The 12 demo images are excluded from all three.
+
+### Training
+
+`training/train.py` writes the loop out step by step:
+
+1. `MLP.init_weights` initializes the parameters with He init and zero biases.
+2. The forward pass computes the logits.
+3. Cross-entropy gives the loss.
+4. `loss.backward()` backpropagates the gradients.
+5. Adam updates the parameters.
+6. The loop repeats over mini-batches of 256.
+
+Training stops when validation loss has not improved for 5 epochs, and the weights from the lowest-loss epoch are kept. Both models get the same tuning budget, learning rate {3e-4, 1e-3} by weight decay {1e-4, 1e-3}, and the MLP also tries width {256, 512, 1024} and dropout {0.2, 0.5}. Selection uses validation accuracy only; the test set is scored once, for the two selected models.
+
+![Loss and accuracy per epoch](docs/hw2/loss_curve.png)
+
+### Results
+
+| Model | Train acc | Val acc | Test acc | Test top-5 | Test macro-F1 |
+|---|---|---|---|---|---|
+| Majority class (cloud) | 6.1% | 4.7% | 4.2% | – | – |
+| Softmax regression | 90.8% | 81.4% | 81.7% | 97.5% | 82.3% |
+| **MLP (served)** | 95.0% | 83.5% | **82.6%** | 97.7% | 83.2% |
+
+**Both models read the object from the activation at about 82% test accuracy, against 4% for the majority class.**
+
+**The MLP has lower test error than softmax regression, but this test set does not separate them.** The MLP's error is 17.4% against 18.3% for softmax regression, a gap of +0.9 points. The 95% paired-bootstrap interval is -0.1 to +2.0 points (n = 2,488), so the interval includes zero.
+
+**The object's identity is close to linearly readable from the region activation, so a hidden layer adds little.** The MLP fits the training set to 95.0% and overfits quickly, which dropout and early stopping limit. This is a hypothesis about why the gap is small, not a tested claim.
+
+One disclosure about the test set: before the final grid, a smoke test (`--quick`) printed test accuracy for one configuration of each model, 79.9% for softmax regression and 79.3% for the MLP. Neither configuration is the one selected, and nothing was tuned on those numbers.
+
+### How a prediction reaches the screen
+
+The user draws a box and clicks **Predict**. `Inspector.tsx` asks `apiSource.ts` to send `POST /api/samples/{id}/predict` with the box. `routers/predict.py` asks the model server (`scripts/model_server.py`, Qwen2.5-VL on a GPU) for the region's pooled vector at hidden state 21. `services/classifier.py` loads `backend/model/mlp.pt` once and runs the MLP on CPU. The browser receives the top 5 classes with their softmax probabilities and draws them as bars under the region.
+
+The 12 default regions already have vectors in the research data, so `training/predict_defaults.py` precomputes their predictions. The static GitHub Pages site shows those predictions and the model card without any server. Predicting a newly drawn region needs the backend and the GPU job.
+
+### Reproduce
+
+```bash
+/home/rbc5xp/.conda/envs/nnedit/bin/python training/prepare_data.py   # data/raw/regions20.npz (git-ignored, 195 MB)
+sbatch training/train.sbatch                                           # or: python training/train.py   (about 1 min on one GPU)
+backend/.venv/bin/python training/predict_defaults.py                  # data/sample/predictions.json
+```
+
+The trained weights (`backend/model/mlp.pt`, `baseline.pt`), the class list and `metrics.json` are committed. The backend needs CPU torch: `pip install torch --index-url https://download.pytorch.org/whl/cpu`.
+
+### Use of AI
+
+Claude (Anthropic), an AI coding agent, wrote the code in `training/` and the HW2 changes to the backend and frontend at the author's direction. The author chose the task, the data, the label set and the setup. The MLP and training loop are standard PyTorch, and no outside model implementation was copied.
+
 ## Why React and not a plain HTML page
 
 An academic page is a document: fixed content, no state. This page has state: the selected image, the active tool, boxes being dragged, annotations that change, two data sources. React splits that into components that re-render when state changes, and TypeScript checks that the data shapes match the backend. The compiled `dist/` is still a plain static site, the same kind of thing as a paper page; only the source is organised as an app.
 
 ## Libraries
 
-Frontend: React 19, Vite 8, TypeScript, TanStack Query (server data), Zustand (UI state), react-zoom-pan-pinch (zoom and pan). Backend: FastAPI, SQLModel (SQLAlchemy + Pydantic), SQLite, pydantic-settings, Pillow, httpx, pytest. Model server: PyTorch, Transformers, Qwen2.5-VL-7B-Instruct.
+Frontend: React 19, Vite 8, TypeScript, TanStack Query (server data), Zustand (UI state), react-zoom-pan-pinch (zoom and pan). Backend: FastAPI, SQLModel (SQLAlchemy + Pydantic), SQLite, pydantic-settings, Pillow, httpx, PyTorch (CPU, for the classifier), pytest. Training: PyTorch, NumPy, matplotlib. Model server: PyTorch, Transformers, Qwen2.5-VL-7B-Instruct.
+
 ## Working on it with an agent
 
 A new data type is a new component registered in `frontend/src/features/viewer/registry.ts` that takes `ViewerProps`. A new annotation shape is a new `Geometry` variant in `frontend/src/types/api.ts`, drawn in `RegionViewer.tsx`. A new endpoint is a router in `backend/app/routers/` included in `main.py`, with a test in `backend/tests/`. A trained model for a later homework loads in `scripts/model_server.py` or in the backend's `lifespan`, and its outputs are stored as annotations with `source = "model"`.
 
 ## Roadmap
 
-HW2: a classifier for whether a read-out names the object, trained on the judge verdicts and the user's tags. HW3: predictions drawn as `source = "model"` boxes next to human ones. HW4: region-level edits and read-out comparison at scale.
+HW3: detection-style outputs, with the classifier's predictions drawn as `source = "model"` boxes next to human ones. HW4: region-level edits and read-out comparison at scale.

@@ -6,6 +6,7 @@ export function Header({ dataset }: { dataset: Dataset | undefined }) {
   const mode = useSettings((s) => s.mode);
   const apiBase = useSettings((s) => s.apiBase);
   const open = useViewer((s) => s.setSettingsOpen);
+  const openModel = useViewer((s) => s.setModelOpen);
   return (
     <header className="topbar">
       <div className="brand">
@@ -20,6 +21,9 @@ export function Header({ dataset }: { dataset: Dataset | undefined }) {
         <button type="button" className={`mode ${mode}`} onClick={() => open(true)} title="Data source settings">
           <span className="dot" />
           {mode === "static" ? "Static · annotations stay in this browser" : `Backend · ${apiBase || "dev proxy"}`}
+        </button>
+        <button type="button" className="mode model" onClick={() => openModel(true)} title="The trained region classifier: training curves and test results">
+          Model
         </button>
         <a href="https://github.com/nkn002/visual-readout" target="_blank" rel="noreferrer">
           GitHub

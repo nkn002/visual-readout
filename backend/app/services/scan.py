@@ -53,6 +53,13 @@ def stage(data_dir: str | Path, out_dir: str | Path) -> Path:
                 dst = out / rel
                 dst.parent.mkdir(parents=True, exist_ok=True)
                 shutil.copyfile(data_dir / rel, dst)
+    # HW2: default-region predictions and the trained model's report, so the static page can show them
+    if (data_dir / "predictions.json").exists():
+        shutil.copyfile(data_dir / "predictions.json", out / "predictions.json")
+    metrics = Path(__file__).resolve().parents[3] / "backend" / "model" / "metrics.json"
+    if metrics.exists():
+        (out / "model").mkdir(exist_ok=True)
+        shutil.copyfile(metrics, out / "model" / "metrics.json")
     return out
 
 

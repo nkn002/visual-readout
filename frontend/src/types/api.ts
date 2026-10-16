@@ -98,3 +98,28 @@ export interface Health {
 }
 export interface DescribeResult { label: string; description: string; model: string; annotation: Annotation }
 export interface Page { offset: number; limit: number; q?: string }
+
+// ---- HW2: the region classifier ----
+export interface TopClass { label: string; prob: number }
+export interface PredictResult {
+  top: TopClass[];
+  model: { name: string; hidden: number[]; activation: string; dropout: number; test_acc?: number | null };
+  n_tokens: number;
+}
+export interface DefaultPrediction { top: TopClass[]; head: string | null; true_class: string | null }
+export interface SplitMetrics { loss?: number; acc: number; top5?: number; macro_f1?: number; recall_per_class?: number[] }
+export interface EpochRow { epoch: number; train_loss: number; val_loss: number; train_acc: number; val_acc: number }
+export interface ModelReport {
+  classes: string[];
+  n: { train: number; val: number; test: number };
+  majority_class: string;
+  majority: { train: SplitMetrics; val: SplitMetrics; test: SplitMetrics };
+  models: Record<string, {
+    config: { hidden: number[]; activation: string; dropout: number; lr: number; weight_decay: number; batch_size: number; epochs: number; patience: number };
+    params: number;
+    train: SplitMetrics; val: SplitMetrics; test: SplitMetrics;
+    history: EpochRow[];
+    grid: { config: { hidden: number[]; dropout: number; lr: number; weight_decay: number }; val_acc: number; val_loss: number; epochs: number }[];
+  }>;
+  test_gap_mlp_minus_softmax: { mean: number; ci95: [number, number]; n: number };
+}

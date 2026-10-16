@@ -1,4 +1,4 @@
-import type { ActivationVector, Annotation, AnnotationCreate, AnnotationUpdate, ConditionKey, Dataset, DescribeResult, Geometry, Health, Page, Sample } from "../types/api";
+import type { ActivationVector, PredictResult, Annotation, AnnotationCreate, AnnotationUpdate, ConditionKey, Dataset, DescribeResult, Geometry, Health, Page, Sample } from "../types/api";
 import type { DataSource } from "./source";
 
 export class ApiSource implements DataSource {
@@ -66,6 +66,9 @@ export class ApiSource implements DataSource {
   }
   getActivations(sampleId: string, geometry: Geometry, layer: number): Promise<ActivationVector> {
     return this.req<ActivationVector>(`/samples/${encodeURIComponent(sampleId)}/activations`, { method: "POST", body: JSON.stringify({ geometry, layer }) });
+  }
+  predictRegion(sampleId: string, geometry: Geometry): Promise<PredictResult> {
+    return this.req<PredictResult>(`/samples/${encodeURIComponent(sampleId)}/predict`, { method: "POST", body: JSON.stringify({ geometry }) });
   }
   async importAnnotations(list: Annotation[]): Promise<number> {
     const r = await this.req<{ imported: number }>("/annotations/import", { method: "POST", body: JSON.stringify(list) });

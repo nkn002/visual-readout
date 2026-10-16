@@ -10,8 +10,10 @@ API (JSON):
     POST /describe            {"images": ["<base64 jpeg/png>", ...], "prompt": "...", "max_new_tokens": 96}
                               -> {"text": "...", "model": "...", "seconds": 1.2}
     POST /activations         {"image": "<base64>", "box": {"x","y","w","h"} (0..1), "layer": 21}
-                              -> {"layer", "dim", "reduced": [64 floats], "explained": [...], "basis", "norm",
-                                  "top": [{"dim", "value"}...], "region_tokens": [...], "rows", "cols"}
+                              -> {"layer", "dim", "vector": [3584 floats], "reduced": [64 floats], "explained",
+                                  "basis", "norm", "top": [{"dim", "value"}...], "region_tokens", "rows", "cols"}
+                              "vector" is the full pooled vector for the backend's classifier; the backend
+                              never forwards it to the browser.
                               The region's activation: the tokens under the box, chosen with the research
                               repo's rule (mmav.vgregions.box_to_tokens, 50% cover), mean-pooled at
                               hidden_states[layer] into one 3584-d vector, exactly the connector's input,
@@ -170,6 +172,7 @@ class Model:
         order = sorted(range(len(v)), key=lambda i: -abs(float(v[i])))[:8]
         return {
             "layer": layer, "dim": int(v.shape[0]),
+            "vector": [float(x) for x in v.tolist()],
             "reduced": [round(float(x), 4) for x in reduced.tolist()],
             "explained": [round(float(x), 5) for x in explained.tolist()],
             "basis": basis,

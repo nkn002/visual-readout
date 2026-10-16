@@ -1,0 +1,314 @@
+{
+ "cf-00": {
+  "top": [
+   {
+    "label": "person",
+    "prob": 0.5357
+   },
+   {
+    "label": "shirt",
+    "prob": 0.327
+   },
+   {
+    "label": "wall",
+    "prob": 0.0392
+   },
+   {
+    "label": "window",
+    "prob": 0.0372
+   },
+   {
+    "label": "sign",
+    "prob": 0.0152
+   }
+  ],
+  "head": "picture",
+  "true_class": null
+ },
+ "cf-01": {
+  "top": [
+   {
+    "label": "grass",
+    "prob": 0.7996
+   },
+   {
+    "label": "bear",
+    "prob": 0.1113
+   },
+   {
+    "label": "elephant",
+    "prob": 0.0377
+   },
+   {
+    "label": "tree",
+    "prob": 0.0259
+   },
+   {
+    "label": "plate",
+    "prob": 0.01
+   }
+  ],
+  "head": "rock",
+  "true_class": null
+ },
+ "cf-02": {
+  "top": [
+   {
+    "label": "tree",
+    "prob": 0.9944
+   },
+   {
+    "label": "grass",
+    "prob": 0.004
+   },
+   {
+    "label": "sky",
+    "prob": 0.0004
+   },
+   {
+    "label": "cloud",
+    "prob": 0.0004
+   },
+   {
+    "label": "elephant",
+    "prob": 0.0004
+   }
+  ],
+  "head": "tree",
+  "true_class": "tree"
+ },
+ "cf-03": {
+  "top": [
+   {
+    "label": "grass",
+    "prob": 0.9957
+   },
+   {
+    "label": "elephant",
+    "prob": 0.0024
+   },
+   {
+    "label": "water",
+    "prob": 0.0008
+   },
+   {
+    "label": "wall",
+    "prob": 0.0004
+   },
+   {
+    "label": "dog",
+    "prob": 0.0003
+   }
+  ],
+  "head": "pen",
+  "true_class": null
+ },
+ "cf-04": {
+  "top": [
+   {
+    "label": "tree",
+    "prob": 0.952
+   },
+   {
+    "label": "grass",
+    "prob": 0.0279
+   },
+   {
+    "label": "wall",
+    "prob": 0.0061
+   },
+   {
+    "label": "door",
+    "prob": 0.0049
+   },
+   {
+    "label": "building",
+    "prob": 0.0034
+   }
+  ],
+  "head": "bush",
+  "true_class": null
+ },
+ "cf-05": {
+  "top": [
+   {
+    "label": "elephant",
+    "prob": 0.3551
+   },
+   {
+    "label": "person",
+    "prob": 0.2876
+   },
+   {
+    "label": "building",
+    "prob": 0.0994
+   },
+   {
+    "label": "shirt",
+    "prob": 0.0813
+   },
+   {
+    "label": "window",
+    "prob": 0.0559
+   }
+  ],
+  "head": "umbrella",
+  "true_class": null
+ },
+ "cf-06": {
+  "top": [
+   {
+    "label": "plate",
+    "prob": 0.9898
+   },
+   {
+    "label": "dog",
+    "prob": 0.0021
+   },
+   {
+    "label": "grass",
+    "prob": 0.002
+   },
+   {
+    "label": "window",
+    "prob": 0.0017
+   },
+   {
+    "label": "cat",
+    "prob": 0.001
+   }
+  ],
+  "head": "group",
+  "true_class": null
+ },
+ "cf-07": {
+  "top": [
+   {
+    "label": "door",
+    "prob": 0.6712
+   },
+   {
+    "label": "water",
+    "prob": 0.1714
+   },
+   {
+    "label": "plate",
+    "prob": 0.076
+   },
+   {
+    "label": "bear",
+    "prob": 0.0197
+   },
+   {
+    "label": "cloud",
+    "prob": 0.0153
+   }
+  ],
+  "head": "design",
+  "true_class": null
+ },
+ "cf-08": {
+  "top": [
+   {
+    "label": "person",
+    "prob": 0.8797
+   },
+   {
+    "label": "shirt",
+    "prob": 0.0815
+   },
+   {
+    "label": "wall",
+    "prob": 0.0131
+   },
+   {
+    "label": "table",
+    "prob": 0.0126
+   },
+   {
+    "label": "window",
+    "prob": 0.0037
+   }
+  ],
+  "head": "people",
+  "true_class": "person"
+ },
+ "cf-09": {
+  "top": [
+   {
+    "label": "plate",
+    "prob": 0.4993
+   },
+   {
+    "label": "dog",
+    "prob": 0.1964
+   },
+   {
+    "label": "window",
+    "prob": 0.1798
+   },
+   {
+    "label": "table",
+    "prob": 0.0343
+   },
+   {
+    "label": "bear",
+    "prob": 0.0212
+   }
+  ],
+  "head": "plate",
+  "true_class": "plate"
+ },
+ "cf-10": {
+  "top": [
+   {
+    "label": "person",
+    "prob": 0.6612
+   },
+   {
+    "label": "shirt",
+    "prob": 0.2902
+   },
+   {
+    "label": "tree",
+    "prob": 0.0209
+   },
+   {
+    "label": "window",
+    "prob": 0.0128
+   },
+   {
+    "label": "door",
+    "prob": 0.0064
+   }
+  ],
+  "head": "girl",
+  "true_class": "person"
+ },
+ "cf-11": {
+  "top": [
+   {
+    "label": "wall",
+    "prob": 0.7668
+   },
+   {
+    "label": "person",
+    "prob": 0.2235
+   },
+   {
+    "label": "plate",
+    "prob": 0.0015
+   },
+   {
+    "label": "water",
+    "prob": 0.0011
+   },
+   {
+    "label": "table",
+    "prob": 0.0009
+   }
+  ],
+  "head": "wall",
+  "true_class": "wall"
+ }
+}

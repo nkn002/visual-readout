@@ -9,6 +9,7 @@ interface ViewerState {
   heatRegionId: string | null; // the drawn region whose activation heatmap is shown
   draftLabel: string;
   settingsOpen: boolean;
+  modelOpen: boolean;
   select(id: string | null): void;
   setTool(t: Tool): void;
   toggleRegion(): void;
@@ -16,6 +17,7 @@ interface ViewerState {
   setHeatRegion(id: string | null): void;
   setDraftLabel(s: string): void;
   setSettingsOpen(open: boolean): void;
+  setModelOpen(open: boolean): void;
 }
 
 export const useViewer = create<ViewerState>()((set) => ({
@@ -25,6 +27,7 @@ export const useViewer = create<ViewerState>()((set) => ({
   heatRegionId: null,
   draftLabel: "",
   settingsOpen: false,
+  modelOpen: false,
   select: (selectedId) => set({ selectedId }),
   setTool: (tool) => set({ tool }),
   toggleRegion: () => set((s) => ({ showRegion: !s.showRegion })),
@@ -32,4 +35,5 @@ export const useViewer = create<ViewerState>()((set) => ({
   setHeatRegion: (heatRegionId) => set({ heatRegionId }),
   setDraftLabel: (draftLabel) => set({ draftLabel }),
   setSettingsOpen: (settingsOpen) => set({ settingsOpen }),
+  setModelOpen: (modelOpen) => set({ modelOpen }),
 }));

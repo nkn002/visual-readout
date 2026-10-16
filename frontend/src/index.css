@@ -223,3 +223,32 @@ details summary { cursor: pointer; color: var(--muted); font-size: 13px; }
 .annlist li.region .lbl small { white-space: nowrap; }
 .annlist li.region .ask { margin-left: 0; }
 .subwindow .kv dd { overflow-wrap: anywhere; }
+
+/* HW2: predictions and the model card */
+.topk { list-style: none; margin: 4px 0 0; padding: 0; display: grid; gap: 3px; }
+.topk li { display: grid; grid-template-columns: 76px 1fr 46px; align-items: center; gap: 8px; font-size: 12px; }
+.topk .name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.topk .bar { height: 8px; background: var(--bg); border-radius: 2px; overflow: hidden; border: 1px solid var(--line); }
+.topk .bar span { display: block; height: 100%; background: var(--accent); }
+.topk li:first-child .bar span { background: #932667; }
+.topk li.truth .name { font-weight: 700; }
+.topk li.truth .name::after { content: " ✓"; color: var(--yes); }
+.topk .pct { text-align: right; font-variant-numeric: tabular-nums; color: var(--muted); }
+.topk.recall li .bar span { background: var(--accent); }
+.prediction { margin: 6px 0 4px 8px; padding: 6px 10px; border-left: 3px solid #932667; background: var(--bg); border-radius: 0 6px 6px 0; }
+.annlist .ask.predict { border-color: #932667; color: #932667; }
+.mode.model { padding: 4px 12px; }
+.panel.wide { width: min(940px, 100%); max-height: 90vh; overflow: auto; }
+.panel h3 { font-size: 13px; margin: 14px 0 6px; }
+.charts { display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 12px; margin: 10px 0; }
+.chart { width: 100%; height: auto; background: var(--surface); border: 1px solid var(--line); border-radius: 4px; }
+.chart .title { font-size: 12px; font-weight: 600; fill: var(--ink); }
+.chart .tick, .chart .legend { font-size: 10px; fill: var(--muted); }
+.chart .axis { font-size: 11px; fill: var(--ink); }
+.chart .grid { stroke: var(--line); stroke-width: 1; }
+.tablewrap { overflow-x: auto; }
+table.metrics { border-collapse: collapse; width: 100%; font-size: 13px; margin: 6px 0 10px; }
+table.metrics th, table.metrics td { text-align: right; padding: 5px 8px; border-bottom: 1px solid var(--line); font-variant-numeric: tabular-nums; }
+table.metrics th:first-child, table.metrics td:first-child { text-align: left; }
+table.metrics th { font-size: 11px; text-transform: uppercase; letter-spacing: 0.05em; color: var(--muted); }
+table.metrics tr.ours td { font-weight: 600; }

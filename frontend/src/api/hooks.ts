@@ -1,5 +1,5 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import type { Annotation, AnnotationCreate, AnnotationUpdate, Geometry } from "../types/api";
+import type { Annotation, AnnotationCreate, AnnotationUpdate, DefaultPrediction, Geometry, ModelReport } from "../types/api";
 import { useDataSource, useSourceKey } from "./source";
 
 export function useDatasets() {
@@ -90,4 +90,24 @@ export function useActivations(sampleId: string | undefined, geometry: Geometry 
     retry: false,
     staleTime: Infinity,
   });
+}
+
+// Static files shipped with every build (GitHub Pages included), so they work in both modes.
+async function staticJson<T>(path: string): Promise<T> {
+  const r = await fetch(`${import.meta.env.BASE_URL}${path}`);
+  if (!r.ok || !(r.headers.get("content-type") ?? "").includes("json")) throw new Error(`${path} is not available`);
+  return (await r.json()) as T;
+}
+
+export function useDefaultPredictions() {
+  return useQuery({ queryKey: ["default-predictions"], queryFn: () => staticJson<Record<string, DefaultPrediction>>("data/predictions.json"), staleTime: Infinity, retry: false });
+}
+
+export function useModelReport(enabled: boolean) {
+  return useQuery({ queryKey: ["model-report"], queryFn: () => staticJson<ModelReport>("data/model/metrics.json"), staleTime: Infinity, retry: false, enabled });
+}
+
+export function usePredictRegion(sampleId: string | undefined) {
+  const src = useDataSource();
+  return useMutation({ mutationFn: (geometry: Geometry) => src.predictRegion(sampleId!, geometry) });
 }

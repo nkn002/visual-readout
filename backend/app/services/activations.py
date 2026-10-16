@@ -24,7 +24,13 @@ def fetch_grid(image_path: str | Path, box: dict, layer: int, url: str, key: Key
     r = httpx.post(f"{url}/activations", json=body, timeout=180)
     r.raise_for_status()
     grid = r.json()
-    out = {k: grid.get(k) for k in ("layer", "dim", "reduced", "explained", "basis", "norm", "top", "region_tokens", "rows", "cols", "pooling", "model")}
+    # "vector" (3584 floats) stays in the backend for the classifier; the router does not send it to the browser
+    out = {k: grid.get(k) for k in ("layer", "dim", "vector", "reduced", "explained", "basis", "norm", "top", "region_tokens", "rows", "cols", "pooling", "model")}
     if key is not None:
         _cache[key] = out
     return out
+
+
+def public(grid: dict) -> dict:
+    """The fields the browser receives: everything except the full vector."""
+    return {k: v for k, v in grid.items() if k != "vector"}

@@ -1,4 +1,4 @@
-import type { ActivationVector, Annotation, AnnotationCreate, AnnotationUpdate, ConditionKey, Dataset, Geometry, Manifest, Page, Sample } from "../types/api";
+import type { ActivationVector, PredictResult, Annotation, AnnotationCreate, AnnotationUpdate, ConditionKey, Dataset, Geometry, Manifest, Page, Sample } from "../types/api";
 import type { DataSource } from "./source";
 import { newId } from "./source";
 
@@ -87,6 +87,9 @@ export const staticSource: DataSource = {
   },
   async getActivations(_sampleId: string, _geometry: Geometry, _layer: number): Promise<ActivationVector> {
     throw new Error("The activation vector needs the backend. Open Settings and switch to Backend.");
+  },
+  async predictRegion(_sampleId: string, _geometry: Geometry): Promise<PredictResult> {
+    throw new Error("Predicting a drawn region needs the backend and the GPU model server. Open Settings and switch to Backend.");
   },
   async importAnnotations(list: Annotation[]): Promise<number> {
     const have = new Set(readAll().map((a) => a.id));

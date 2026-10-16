@@ -10,7 +10,10 @@ jobs:
       - uses: actions/setup-python@v5
         with: { python-version: "3.12" }
       - working-directory: backend
-        run: pip install -e ".[dev]" && python -m pytest -q
+        # CPU-only torch keeps the job small; the default PyPI build pulls CUDA wheels
+        run: |
+          pip install torch numpy --index-url https://download.pytorch.org/whl/cpu --extra-index-url https://pypi.org/simple
+          pip install -e ".[dev]" && python -m pytest -q
   frontend:
     runs-on: ubuntu-latest
     steps:

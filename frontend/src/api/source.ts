@@ -1,5 +1,5 @@
 import { useMemo } from "react";
-import type { ActivationVector, Annotation, AnnotationCreate, AnnotationUpdate, ConditionKey, Dataset, Geometry, Page, Sample } from "../types/api";
+import type { ActivationVector, PredictResult, Annotation, AnnotationCreate, AnnotationUpdate, ConditionKey, Dataset, Geometry, Page, Sample } from "../types/api";
 import { useSettings } from "../stores/settingsStore";
 import { staticSource } from "./staticSource";
 import { ApiSource } from "./apiSource";
@@ -21,6 +21,8 @@ export interface DataSource {
   describeRegion(sampleId: string, geometry: Geometry): Promise<Annotation>;
   /** The region's activation: tokens under the box mean-pooled at hidden_states[layer] (21 = the read-out layer). */
   getActivations(sampleId: string, geometry: Geometry, layer: number): Promise<ActivationVector>;
+  /** HW2: classify a drawn region with the trained MLP (needs the backend and the GPU model server). */
+  predictRegion(sampleId: string, geometry: Geometry): Promise<PredictResult>;
 }
 
 export function useDataSource(): DataSource {

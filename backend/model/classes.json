@@ -1,0 +1,109 @@
+{
+ "classes": [
+  "person",
+  "window",
+  "sign",
+  "tree",
+  "cloud",
+  "sky",
+  "building",
+  "wall",
+  "wheel",
+  "grass",
+  "shirt",
+  "car",
+  "dog",
+  "plate",
+  "water",
+  "door",
+  "cat",
+  "table",
+  "elephant",
+  "bear"
+ ],
+ "forms": {
+  "person": [
+   "man",
+   "men",
+   "woman",
+   "women",
+   "person",
+   "people",
+   "boy",
+   "girl",
+   "lady",
+   "ladi",
+   "guy",
+   "child",
+   "children",
+   "kid",
+   "player",
+   "skier",
+   "surfer",
+   "skateboarder"
+  ],
+  "window": [
+   "window"
+  ],
+  "sign": [
+   "sign"
+  ],
+  "tree": [
+   "tree",
+   "tre"
+  ],
+  "cloud": [
+   "cloud"
+  ],
+  "sky": [
+   "sky"
+  ],
+  "building": [
+   "building",
+   "house",
+   "hous"
+  ],
+  "wall": [
+   "wall"
+  ],
+  "wheel": [
+   "wheel",
+   "tire"
+  ],
+  "grass": [
+   "gras",
+   "grass"
+  ],
+  "shirt": [
+   "shirt",
+   "t-shirt"
+  ],
+  "car": [
+   "car"
+  ],
+  "dog": [
+   "dog"
+  ],
+  "plate": [
+   "plate"
+  ],
+  "water": [
+   "water"
+  ],
+  "door": [
+   "door"
+  ],
+  "cat": [
+   "cat"
+  ],
+  "table": [
+   "table"
+  ],
+  "elephant": [
+   "elephant"
+  ],
+  "bear": [
+   "bear"
+  ]
+ }
+}

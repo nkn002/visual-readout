@@ -132,9 +132,38 @@ def test_activations_without_and_with_fake_model_server(client, monkeypatch):
     assert client.post("/api/samples/cf-00/activations", json={"geometry": {"type": "point", "x": 0.1, "y": 0.1}}).status_code == 422
     monkeypatch.setattr(dsvc, "model_url", lambda settings: "http://fake:1")
     monkeypatch.setattr(svc, "fetch_grid", lambda path, b, layer, url, key=None: {
-        "layer": layer, "dim": 3584, "reduced": [0.1, -0.9], "explained": [0.3, 0.1], "basis": "fake PCA", "norm": 130.0,
+        "layer": layer, "dim": 3584, "vector": [0.0] * 3584, "reduced": [0.1, -0.9], "explained": [0.3, 0.1], "basis": "fake PCA", "norm": 130.0,
         "top": [{"dim": 7, "value": -80.5}], "region_tokens": [1, 4], "rows": 2, "cols": 3, "pooling": "fake", "model": "fake"})
     r = client.post("/api/samples/cf-00/activations", json={"geometry": box, "layer": 21})
     assert r.status_code == 200, r.text
     g = r.json()
     assert g["dim"] == 3584 and g["reduced"] == [0.1, -0.9] and g["region_tokens"] == [1, 4] and g["layer"] == 21
+    assert "vector" not in g  # the full vector stays in the backend
+
+
+def test_predict_with_trained_model(client, monkeypatch):
+    import random
+
+    import pytest
+
+    pytest.importorskip("torch")
+    from app.services import activations as svc
+    from app.services import classifier
+    from app.services import describe as dsvc
+
+    box = {"type": "bbox", "x": 0.2, "y": 0.2, "w": 0.3, "h": 0.3}
+    monkeypatch.setattr(dsvc, "model_url", lambda settings: "http://fake:1")
+    rnd = random.Random(0)
+    monkeypatch.setattr(svc, "fetch_grid", lambda path, b, layer, url, key=None: {
+        "layer": layer, "dim": 3584, "vector": [rnd.gauss(0, 1) for _ in range(3584)], "region_tokens": [3, 4, 5]})
+    try:
+        classifier.load()
+    except classifier.ClassifierUnavailable as e:
+        pytest.skip(str(e))
+    r = client.post("/api/samples/cf-03/predict", json={"geometry": box})
+    assert r.status_code == 200, r.text
+    body = r.json()
+    probs = [t["prob"] for t in body["top"]]
+    assert len(probs) == 5 and probs == sorted(probs, reverse=True) and 0 < sum(probs) <= 1.0001
+    assert body["n_tokens"] == 3 and body["model"]["name"] == "MLP"
+    assert client.post("/api/samples/cf-03/predict", json={"geometry": {"type": "point", "x": 0.1, "y": 0.1}}).status_code == 422

@@ -7,8 +7,11 @@ services:
       DATA_DIR: /data/sample
       DATABASE_URL: sqlite:////data/db/app.db
       CORS_ORIGINS: http://localhost:5173,https://nkn002.github.io
+      CLASSIFIER_DIR: /code/model
+      TRAINING_DIR: /training
     volumes:
       - ./backend:/code
+      - ./training:/training
       - ./data:/data
     ports: ["8000:8000"]
   frontend:

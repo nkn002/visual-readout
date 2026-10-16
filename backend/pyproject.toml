@@ -17,6 +17,8 @@ dependencies = [
 
 [project.optional-dependencies]
 dev = ["pytest", "httpx"]
+# the HW2 classifier; install the CPU build: pip install torch --index-url https://download.pytorch.org/whl/cpu
+model = ["torch>=2.4", "numpy>=1.26"]
 
 [tool.setuptools]
 packages = ["app", "app.routers", "app.services"]

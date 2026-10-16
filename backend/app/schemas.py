@@ -102,3 +102,14 @@ class ActivationVector(SQLModel):
     cols: int
     pooling: str | None = None
     model: str | None = None
+
+
+class PredictRequest(SQLModel):
+    geometry: dict[str, Any]  # {"type": "bbox", "x", "y", "w", "h"} normalised to the image
+    condition: str = "orig"
+
+
+class PredictResult(SQLModel):
+    top: list[dict[str, Any]]  # [{label, prob}], highest first
+    model: dict[str, Any]  # name, hidden sizes, activation, test accuracy
+    n_tokens: int  # how many image tokens were mean-pooled into the input vector
