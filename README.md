@@ -6,7 +6,7 @@ Live: **https://nkn002.github.io/visual-readout/** · DS7400 Deep Learning, Home
 
 ## The goal
 
-A user opens an image, draws a region, and asks Qwen2.5-VL what is in it. A **Default region** button reveals the region the research dataset defined for that image and the text a verbalizer produced for it. Users can record their own verdicts and save everything. HW1 delivered that viewer. HW2 adds a trained neural network: **Predict** classifies a drawn region into one of 20 object classes from Qwen2.5-VL's internal activation for that region.
+A user opens an image, draws a region, and asks Qwen2.5-VL what is in it. A **Default region** button reveals the region the research dataset defined for that image and the text a verbalizer produced for it. Users can record their own verdicts and save everything. HW1 delivered that viewer. HW2 adds a trained neural network: **Predict** classifies a drawn region into one of 20 semantic categories (person, wild animal, vehicle, plant, food and so on) from Qwen2.5-VL's internal activation for that region.
 
 The research behind the data maps Qwen2.5-VL region activations into a frozen text verbalizer through a small trained connector. The viewer is the tool for looking at those regions and read-outs one at a time.
 
@@ -23,7 +23,7 @@ The research behind the data maps Qwen2.5-VL region activations into a frozen te
 | **Activation heatmap** of a drawn region: its tokens at the read-out layer (hidden state 21, output of layer 20) mean-pooled into one vector, as the research connector does, projected onto 64 principal components and shown as an 8 × 8 heatmap in a panel under the image | `scripts/model_server.py`, `backend/app/routers/activations.py`, `frontend/src/features/viewer/ActivationPanel.tsx` |
 | **Default region:** reveal the dataset's box, its phrase, and the frozen verbalizer's read-out with the judge's verdict | `StageBar.tsx`, `Inspector.tsx` |
 | Give your own names-it / misses-it verdict on that read-out | `frontend/src/features/annotate/MentionTags.tsx` |
-| **HW2, Predict:** a trained MLP classifies a drawn region into 20 object classes and shows the top 5 with probabilities | `training/`, `backend/app/routers/predict.py`, `Inspector.tsx` |
+| **HW2, Predict:** a trained MLP classifies a drawn region into 20 semantic categories and shows the top 5 with probabilities | `training/`, `backend/app/routers/predict.py`, `Inspector.tsx` |
 | **HW2 optional, interactive training:** the **Train** button picks learning rate, epochs, hidden layers and units, activation, dropout, weight decay, batch size and training-set size, then trains in the backend | `frontend/src/components/TrainPanel.tsx`, `backend/app/routers/train.py`, `backend/app/services/trainer.py` |
 | **HW2 optional, training monitor:** the same panel draws train and validation loss and accuracy live, one point per epoch, then shows loss, accuracy, top-5 and macro-F1 on train, validation and test, plus predictions on random test regions; **Use this model for Predict** serves the new model until reset | `TrainPanel.tsx`, `LineChart.tsx` |
 | **HW2, model card:** the **Model** button shows the loss and accuracy curves, train/val/test scores against two baselines, and per-class recall | `frontend/src/components/ModelCard.tsx`, `backend/model/metrics.json` |
@@ -149,7 +149,7 @@ The user opens Settings, picks a mode, and can test the connection.
 
 ### 9. Predict what a region shows (HW2)
 
-The user clicks **Predict** under a drawn region. The trained MLP shows its five most likely object classes with probabilities.
+The user clicks **Predict** under a drawn region. The trained MLP shows its five most likely categories with probabilities.
 
 `Inspector.tsx` button → `apiSource.ts` sends `POST /api/samples/{id}/predict` with the box → `routers/predict.py` → the model server pools the tokens under the box at hidden state 21 → `services/classifier.py` runs the MLP from `backend/model/mlp.pt` → the top 5 classes return → `TopClasses.tsx` draws them as bars under the region. The **Model** button opens `ModelCard.tsx`, which reads `metrics.json` and shows the curves and test scores.
 
@@ -396,15 +396,17 @@ classDiagram
 
 ### What it predicts and why this model
 
-**The classifier names the object in a region from Qwen2.5-VL's activation alone.** Its input is the vector the research connector reads: Qwen2.5-VL-7B's hidden state 21 (the output of layer 20), mean-pooled over the image tokens under the box, 3,584 numbers. Its output is one of 20 object classes. This tests whether the activation the verbalizer reads holds the object's identity, which is the question the research asks.
+**The classifier names the kind of thing in a region from Qwen2.5-VL's activation alone.** Its input is the vector the research connector reads: Qwen2.5-VL-7B's hidden state 21 (the output of layer 20), mean-pooled over the image tokens under the box, 3,584 numbers. Its output is one of 20 semantic categories. This tests whether the activation the verbalizer reads holds what the region shows, which is the question the research asks.
 
 **A one-hidden-layer MLP is the smallest network the homework allows.** The architecture is 3584 → 512 → ReLU → dropout 0.5 → 20, with 1,845,780 parameters. The inputs are standardized with the training mean and standard deviation, which the checkpoint stores. Softmax regression, the same code with no hidden layer, is the shallow baseline.
 
 ### Data
 
 - **The inputs come from the research repo's stored region vectors.** The repo holds 200,000 Visual Genome region vectors (`results/data/vgreg_V.npy`) and their phrases (`vgreg_meta.jsonl`). They were extracted with the same prompt, layer, token rule and pooling the app uses. The app's vector for the same box matches the stored one at cosine 0.995 to 0.998 on four checked regions.
-- **Each label comes from the head noun of the region's phrase.** The head noun of each phrase (`mmav.site.head_noun`) maps to 20 classes through an explicit list in `training/prepare_data.py`. Plural stems are merged ("trees" and "tree" become tree). The people words (man, woman, boy, girl, people and others) are merged into person, and non-objects such as "part" are dropped. Each class is capped at 1,500 regions so "person" does not dominate.
-- **The split is by image, so no photo has regions in two sets.** It is 80/10/10 with seed 0: 20,766 train, 2,555 validation and 2,488 test regions. The 12 demo images are excluded from all three.
+- **Each label is the region's head noun, grouped into one of 20 categories.** `training/prepare_data.py` takes the head noun of each phrase (`mmav.site.head_noun`) and maps it through an explicit word list: for example dog, cat and horse are domestic animal, tree, grass and flower are plant, and plate, bowl and fork are tableware. Plural forms are counted, and three phrases override the head noun: "license plate" is a vehicle, "hot dog" is food and "teddy bear" is a household object. Ambiguous or non-object nouns such as "part", "shadow", "trunk" and "light" are left out.
+- **The 20 categories are** person, domestic animal, wild animal, head and face, limb, clothing and accessory, vehicle, sky and cloud, plant, ground and water, building, window and door, wall, floor and ceiling, street and road, food, tableware, furniture, household and electronics, sign and text, sports equipment.
+- **Every category has the same size.** Each is capped at 2,500 regions, and all 20 have more than that, so the dataset holds 50,000 regions and chance accuracy is 5%.
+- **The split is by image, so no photo has regions in two sets.** It is 80/10/10 with seed 0: 39,968 train, 5,075 validation and 4,957 test regions. The 12 demo images are excluded from all three.
 
 ### Training
 
@@ -425,21 +427,26 @@ Training stops when validation loss has not improved for 5 epochs, and the weigh
 
 | Model | Train acc | Val acc | Test acc | Test top-5 | Test macro-F1 |
 |---|---|---|---|---|---|
-| Majority class (cloud) | 6.1% | 4.7% | 4.2% | – | – |
-| Softmax regression | 90.8% | 81.4% | 81.7% | 97.5% | 82.3% |
-| **MLP (served)** | 95.0% | 83.5% | **82.6%** | 97.7% | 83.2% |
+| Majority class (food) | 5.1% | 4.8% | 4.6% | – | – |
+| Softmax regression | 78.7% | 70.6% | 71.9% | 96.0% | 71.8% |
+| **MLP (served)** | 87.3% | 73.2% | **73.8%** | 96.6% | 73.6% |
 
-**Both models read the object from the activation at about 82% test accuracy, against 4% for the majority class.**
+**The MLP names the category of a held-out region 73.8% of the time, against 4.6% for the majority class.** Its top-5 accuracy is 96.6%.
 
-**The MLP has lower test error than softmax regression, but this test set does not separate them.** The MLP's error is 17.4% against 18.3% for softmax regression, a gap of +0.9 points. The 95% paired-bootstrap interval is -0.1 to +2.0 points (n = 2,488), so the interval includes zero.
+**The MLP has lower test error than softmax regression, and the gap is outside noise.** The MLP's error is 26.2% against 28.1% for softmax regression, a gap of +1.9 points. The 95% paired-bootstrap interval is +1.0 to +2.7 points (n = 4,957).
 
-**The object's identity is close to linearly readable from the region activation, so a hidden layer adds little.** The MLP fits the training set to 95.0% and overfits quickly, which dropout and early stopping limit. This is a hypothesis about why the gap is small, not a tested claim.
+**Each category joins several nouns, which may be why the hidden layer helps here.** An earlier version of this model predicted 20 single nouns. There the MLP led softmax regression by only +0.9 points (82.6% vs 81.7%), with a 95% interval of -0.1 to +2.0. A category such as "household and electronics" groups regions that do not sit in one linear direction, and a hidden layer can combine several directions. This is a hypothesis, not a tested claim.
 
-One disclosure about the test set: before the final grid, a smoke test (`--quick`) printed test accuracy for one configuration of each model, 79.9% for softmax regression and 79.3% for the MLP. Neither configuration is the one selected, and nothing was tuned on those numbers.
+**Both models overfit quickly.** The MLP fits the training set to 87.3% while validation stays near 73.2%. Dropout and early stopping limit the overfitting.
+
+Two disclosures about the test set:
+
+- **The earlier 20-noun version's test scores were seen before this label set was chosen.** The label set was replaced at the author's request because single nouns made odd classes. The 20 categories were fixed and approved before this model was trained, and this test set was scored once.
+- **A smoke test of the first version printed test accuracy for configurations that were not selected.** Nothing was tuned on those numbers.
 
 ### How a prediction reaches the screen
 
-The user draws a box and clicks **Predict**. `Inspector.tsx` asks `apiSource.ts` to send `POST /api/samples/{id}/predict` with the box. `routers/predict.py` asks the model server (`scripts/model_server.py`, Qwen2.5-VL on a GPU) for the region's pooled vector at hidden state 21. `services/classifier.py` loads `backend/model/mlp.pt` once and runs the MLP on CPU. The browser receives the top 5 classes with their softmax probabilities and draws them as bars under the region.
+The user draws a box and clicks **Predict**. `Inspector.tsx` asks `apiSource.ts` to send `POST /api/samples/{id}/predict` with the box. `routers/predict.py` asks the model server (`scripts/model_server.py`, Qwen2.5-VL on a GPU) for the region's pooled vector at hidden state 21. `services/classifier.py` loads `backend/model/mlp.pt` once and runs the MLP on CPU. The browser receives the top 5 categories with their softmax probabilities and draws them as bars under the region.
 
 The 12 default regions already have vectors in the research data, so `training/predict_defaults.py` precomputes their predictions. The static GitHub Pages site shows those predictions and the model card without any server. Predicting a newly drawn region needs the backend and the GPU job.
 
@@ -447,7 +454,7 @@ The 12 default regions already have vectors in the research data, so `training/p
 
 **The Train panel runs the same `train_one` loop as `training/train.py`, in a background thread of the backend.** The loop reports each epoch through a callback, and the browser polls `GET /api/train/{id}` once a second to redraw the curves. **Stop** ends the run after the current epoch. The finished run reports loss, accuracy, top-5 and macro-F1 on train, validation and test, and shows eight random test regions with their true and predicted classes. **Use this model for Predict** swaps the served model in memory; `backend/model/mlp.pt` is never overwritten.
 
-**Training runs on the backend's CPU, so the panel offers a smaller training set.** On the cluster's one-CPU VS Code node, one epoch takes about 4 s on 4,000 regions and about 9 s on all 20,766. In-app training needs `data/raw/regions20.npz` from `training/prepare_data.py`, which is git-ignored.
+**Training runs on the backend's CPU, so the panel offers a smaller training set.** On the cluster's one-CPU VS Code node, one epoch takes about 2 s on 4,000 regions and about 18 s on all 39,968. In-app training needs `data/raw/regions20.npz` from `training/prepare_data.py`, which is git-ignored.
 
 ### Reproduce
 

@@ -226,7 +226,7 @@ details summary { cursor: pointer; color: var(--muted); font-size: 13px; }
 
 /* HW2: predictions and the model card */
 .topk { list-style: none; margin: 4px 0 0; padding: 0; display: grid; gap: 3px; }
-.topk li { display: grid; grid-template-columns: 76px 1fr 46px; align-items: center; gap: 8px; font-size: 12px; }
+.topk li { display: grid; grid-template-columns: minmax(96px, 150px) 1fr 46px; align-items: center; gap: 8px; font-size: 12px; }
 .topk .name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .topk .bar { height: 8px; background: var(--bg); border-radius: 2px; overflow: hidden; border: 1px solid var(--line); }
 .topk .bar span { display: block; height: 100%; background: var(--accent); }

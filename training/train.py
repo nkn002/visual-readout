@@ -119,7 +119,7 @@ def plot(curves: dict, out: Path) -> None:
         axes[1].plot(ep, [r["train_acc"] for r in h], color=colours[name], label=f"{name}, train")
         axes[1].plot(ep, [r["val_acc"] for r in h], color=colours[name], ls="--", label=f"{name}, validation")
     axes[0].set(xlabel="Epoch", ylabel="Cross-entropy loss", title="Loss per epoch")
-    axes[1].set(xlabel="Epoch", ylabel="Accuracy", title="Accuracy per epoch (20 classes, chance 0.05)")
+    axes[1].set(xlabel="Epoch", ylabel="Accuracy", title="Accuracy per epoch (20 categories, chance 0.05)")
     for ax in axes:
         ax.grid(alpha=0.3)
     handles, labels = axes[0].get_legend_handles_labels()

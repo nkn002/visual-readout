@@ -189,7 +189,7 @@ export function Inspector(p: Props) {
                 <button type="button" className="ask" disabled={asking !== null} onClick={() => void ask(a)} title="Send this region to Qwen2.5-VL and ask what it is">
                   {asking === a.id ? "Asking…" : "Ask Qwen2.5-VL"}
                 </button>
-                <button type="button" className="ask predict" disabled={preds[a.id] === "loading"} onClick={() => void predict(a)} title="Classify this region with the trained MLP (20 object classes)">
+                <button type="button" className="ask predict" disabled={preds[a.id] === "loading"} onClick={() => void predict(a)} title="Classify this region with the trained MLP (20 categories)">
                   {preds[a.id] === "loading" ? "Predicting…" : "Predict"}
                 </button>
                 <button

@@ -36,7 +36,8 @@ _data_cache: dict = {}
 def _data():
     """The labelled split as CPU tensors, loaded once: {train, val, test: (X, y)}, phrases, classes."""
     s = get_settings()
-    if s.train_data not in _data_cache:
+    key = (s.train_data, s.train_data.stat().st_mtime_ns if s.train_data.exists() else 0)  # reload when the file is rebuilt
+    if key not in _data_cache:
         try:
             import numpy as np
             import torch
@@ -50,8 +51,9 @@ def _data():
         split = z["split"]
         parts = {name: (X[split == k], y[split == k]) for k, name in enumerate(["train", "val", "test"])}
         phrases = z["phrase"][split == 2].tolist() if "phrase" in z.files else None
-        _data_cache[s.train_data] = (parts, phrases)
-    parts, phrases = _data_cache[s.train_data]
+        _data_cache.clear()
+        _data_cache[key] = (parts, phrases)
+    parts, phrases = _data_cache[key]
     return parts, phrases
 
 

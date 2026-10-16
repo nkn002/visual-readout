@@ -25,10 +25,12 @@ def main() -> None:
     spec.loader.exec_module(mod)
     model, ckpt = mod.load_checkpoint(ROOT / "backend" / "model" / "mlp.pt")
     classes = ckpt["classes"]
-    forms = json.loads((ROOT / "backend" / "model" / "classes.json").read_text())["forms"]
-    to_class = {f: k for k, fs in forms.items() for f in fs}
     sys.path.insert(0, str(NLA_ROOT / "src"))
-    from mmav.site import head_noun
+    sys.path.insert(0, str(ROOT / "training"))
+    from mmav.site import _stem, head_noun
+    from prepare_data import build_label_map, label_of
+
+    to = build_label_map(_stem)
 
     V = np.load(NLA_ROOT / "results" / "data" / "vgreg_V.npy", mmap_mode="r")
     out = {}
@@ -41,7 +43,7 @@ def main() -> None:
             out[s["id"]] = {
                 "top": [{"label": classes[i], "prob": round(float(v), 4)} for v, i in zip(top.values.tolist(), top.indices.tolist())],
                 "head": head_noun(s["phrase"]),
-                "true_class": to_class.get(head_noun(s["phrase"]) or ""),
+                "true_class": label_of(s["phrase"], head_noun, to),
             }
             print(f"{s['id']}: '{s['phrase']}' -> {out[s['id']]['top'][0]['label']} ({out[s['id']]['top'][0]['prob']:.2f}); true class {out[s['id']]['true_class']}")
     (ROOT / "data" / "sample" / "predictions.json").write_text(json.dumps(out, indent=1))

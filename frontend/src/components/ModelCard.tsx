@@ -24,7 +24,8 @@ export function ModelCard() {
           <>
             <p>
               A multi-layer perceptron reads one region's activation, Qwen2.5-VL-7B's hidden state 21 mean-pooled over the image tokens under the box (3,584 numbers),
-              and predicts which of {r.classes.length} object classes the region shows. Labels come from the head noun of each Visual Genome phrase.
+              and predicts which of {r.classes.length} categories the region shows. Each label is the head noun of the region's Visual Genome phrase,
+              grouped into a category: for example dog, cat and horse are "domestic animal", and tree, grass and flower are "plant".
             </p>
             <dl className="kv">
               <dt>Architecture</dt>
@@ -80,9 +81,14 @@ export function ModelCard() {
             <p className="small">
               On the {r.test_gap_mlp_minus_softmax.n.toLocaleString()} test regions the MLP's accuracy is {(100 * r.test_gap_mlp_minus_softmax.mean).toFixed(1)} points higher than softmax regression,
               with a 95% paired-bootstrap interval of {(100 * r.test_gap_mlp_minus_softmax.ci95[0]).toFixed(1)} to {(100 * r.test_gap_mlp_minus_softmax.ci95[1]).toFixed(1)} points.
-              The interval includes zero, so this test set does not separate the two models. Both reach about 82%, against {pct(r.majority.test.acc)} for always predicting the most common class.
+              {r.test_gap_mlp_minus_softmax.ci95[0] > 0
+                ? " The interval excludes zero, so the MLP's lead is outside noise."
+                : " The interval includes zero, so this test set does not separate the two models."}{" "}
+              The MLP reaches {pct(r.models[MLP].test.acc)}, against {pct(r.majority.test.acc)} for always predicting the most common category.
             </p>
-            <h3>Test recall per class (MLP)</h3>
+            <h3>Categories</h3>
+            <p className="small muted">{r.classes.join(" · ")}</p>
+            <h3>Test recall per category (MLP)</h3>
             <ol className="topk recall">
               {r.classes
                 .map((c, i) => ({ c, v: r.models[MLP].test.recall_per_class?.[i] ?? 0 }))

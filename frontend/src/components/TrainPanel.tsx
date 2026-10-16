@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { useDataSource } from "../api/source";
-import { useTrainingRun } from "../api/hooks";
+import { useModelReport, useTrainingRun } from "../api/hooks";
 import { useSettings } from "../stores/settingsStore";
 import { useViewer } from "../stores/viewerStore";
 import type { TrainConfig } from "../types/api";
@@ -20,7 +20,10 @@ export function TrainPanel() {
   const [runId, setRunId] = useState<string | null>(null);
   const [msg, setMsg] = useState("");
   const run = useTrainingRun(runId);
+  const report = useModelReport(open);
   if (!open) return null;
+  const nAll = report.data?.n.train;
+  const shippedTest = report.data?.models["MLP"]?.test.acc;
 
   const snap = run.data;
   const busy = snap ? ["queued", "running"].includes(snap.status) : false;
@@ -79,7 +82,7 @@ export function TrainPanel() {
           </label>
           <label>Training regions
             <select id="t-n" value={cfg.n_train} onChange={num("n_train")} disabled={busy}>
-              {[2000, 4000, 8000, 20766].map((v) => <option key={v} value={v}>{v.toLocaleString()}{v === 20766 ? " (all)" : ""}</option>)}
+              {[2000, 4000, 8000, 16000, ...(nAll ? [nAll] : [])].map((v) => <option key={v} value={v}>{v.toLocaleString()}{v === nAll ? " (all)" : ""}</option>)}
             </select>
           </label>
           <label>Early-stop patience
@@ -130,7 +133,7 @@ export function TrainPanel() {
                   </table>
                 </div>
                 <p className="small muted">
-                  {snap.result.params.toLocaleString()} parameters; weights from the epoch with the lowest validation loss. The shipped model scores 82.6% on the same test set.
+                  {snap.result.params.toLocaleString()} parameters; weights from the epoch with the lowest validation loss.{shippedTest !== undefined ? ` The shipped model scores ${pct(shippedTest)} on the same test set.` : ""}
                 </p>
                 <h3>Predictions on random test regions</h3>
                 <ul className="examples">

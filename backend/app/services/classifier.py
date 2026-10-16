@@ -34,9 +34,9 @@ def override_label() -> str | None:
     return _override["label"] if _override else None
 
 
-@lru_cache
 def load():
-    """(model, checkpoint dict). Raises ClassifierUnavailable when torch or the checkpoint is missing."""
+    """(model, checkpoint dict). Raises ClassifierUnavailable when torch or the checkpoint is missing.
+    Reloads when mlp.pt changes on disk, so a retrained model is served without restarting the backend."""
     try:
         import torch  # noqa: F401
     except ImportError as e:
@@ -45,6 +45,13 @@ def load():
     ckpt_path = s.classifier_dir / "mlp.pt"
     if not ckpt_path.exists():
         raise ClassifierUnavailable(f"no trained model at {ckpt_path}; run training/train.py")
+    return _load(str(ckpt_path), ckpt_path.stat().st_mtime_ns)
+
+
+@lru_cache(maxsize=2)
+def _load(ckpt: str, _mtime: int):
+    s = get_settings()
+    ckpt_path = s.classifier_dir / "mlp.pt"
     spec = importlib.util.spec_from_file_location("vr_training_model", s.training_dir / "model.py")
     mod = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(mod)
