@@ -43,7 +43,9 @@ cd frontend && npm ci && npm run dev                                            
 Backend mode, annotations persist and the model can be asked:
 
 ```bash
-cd backend && python3 -m venv .venv && .venv/bin/pip install -e ".[dev]"
+cd backend && python3 -m venv .venv
+.venv/bin/pip install torch numpy --index-url https://download.pytorch.org/whl/cpu   # CPU torch for the HW2 classifier
+.venv/bin/pip install -e ".[dev]"
 .venv/bin/uvicorn app.main:app --reload            # http://localhost:8000, docs at /docs
 ```
 
@@ -390,9 +392,9 @@ classDiagram
 
 ### Data
 
-- **Source.** The research repo's 200,000 Visual Genome region vectors (`results/data/vgreg_V.npy`) and their phrases (`vgreg_meta.jsonl`). They were extracted with the same prompt, layer, token rule and pooling the app uses. The app's vector for the same box matches the stored one at cosine 0.995 to 0.998 on four checked regions.
-- **Labels.** The head noun of each phrase (`mmav.site.head_noun`) maps to 20 classes through an explicit list in `training/prepare_data.py`. Plural stems are merged ("trees" and "tree" become tree). The people words (man, woman, boy, girl, people and others) are merged into person, and non-objects such as "part" are dropped. Each class is capped at 1,500 regions so "person" does not dominate.
-- **Split.** The split is by image, 80/10/10 with seed 0, so no photo has regions in two sets: 20,766 train, 2,555 validation and 2,488 test regions. The 12 demo images are excluded from all three.
+- **The inputs come from the research repo's stored region vectors.** The repo holds 200,000 Visual Genome region vectors (`results/data/vgreg_V.npy`) and their phrases (`vgreg_meta.jsonl`). They were extracted with the same prompt, layer, token rule and pooling the app uses. The app's vector for the same box matches the stored one at cosine 0.995 to 0.998 on four checked regions.
+- **Each label comes from the head noun of the region's phrase.** The head noun of each phrase (`mmav.site.head_noun`) maps to 20 classes through an explicit list in `training/prepare_data.py`. Plural stems are merged ("trees" and "tree" become tree). The people words (man, woman, boy, girl, people and others) are merged into person, and non-objects such as "part" are dropped. Each class is capped at 1,500 regions so "person" does not dominate.
+- **The split is by image, so no photo has regions in two sets.** It is 80/10/10 with seed 0: 20,766 train, 2,555 validation and 2,488 test regions. The 12 demo images are excluded from all three.
 
 ### Training
 
