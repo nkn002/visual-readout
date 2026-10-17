@@ -1,4 +1,4 @@
-import type { ActivationVector, PredictResult, TrainConfig, TrainSnapshot, Annotation, AnnotationCreate, AnnotationUpdate, ConditionKey, Dataset, Geometry, Manifest, Page, Sample } from "../types/api";
+import type { ActivationVector, ProbeView, PredictResult, TrainConfig, TrainSnapshot, Annotation, AnnotationCreate, AnnotationUpdate, ConditionKey, Dataset, Geometry, Manifest, Page, Sample } from "../types/api";
 import type { DataSource } from "./source";
 import { newId } from "./source";
 
@@ -91,6 +91,9 @@ export const staticSource: DataSource = {
   },
   async predictRegion(_sampleId: string, _geometry: Geometry): Promise<PredictResult> {
     throw new Error("Predicting a drawn region needs the backend and the GPU model server. Open Settings and switch to Backend.");
+  },
+  async probeRegion(_sampleId: string, _geometry: Geometry): Promise<ProbeView> {
+    throw new Error("Visualizing the probe needs the backend and the GPU model server. Open Settings and switch to Backend.");
   },
   async startTraining(_cfg: TrainConfig): Promise<TrainSnapshot> {
     throw new Error(NEEDS_BACKEND);

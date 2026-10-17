@@ -1,4 +1,4 @@
-import type { ActivationVector, PredictResult, TrainConfig, TrainSnapshot, Annotation, AnnotationCreate, AnnotationUpdate, ConditionKey, Dataset, DescribeResult, Geometry, Health, Page, Sample } from "../types/api";
+import type { ActivationVector, ProbeView, PredictResult, TrainConfig, TrainSnapshot, Annotation, AnnotationCreate, AnnotationUpdate, ConditionKey, Dataset, DescribeResult, Geometry, Health, Page, Sample } from "../types/api";
 import type { DataSource } from "./source";
 
 export class ApiSource implements DataSource {
@@ -69,6 +69,9 @@ export class ApiSource implements DataSource {
   }
   predictRegion(sampleId: string, geometry: Geometry): Promise<PredictResult> {
     return this.req<PredictResult>(`/samples/${encodeURIComponent(sampleId)}/predict`, { method: "POST", body: JSON.stringify({ geometry }) });
+  }
+  probeRegion(sampleId: string, geometry: Geometry): Promise<ProbeView> {
+    return this.req<ProbeView>(`/samples/${encodeURIComponent(sampleId)}/probe`, { method: "POST", body: JSON.stringify({ geometry }) });
   }
   startTraining(cfg: TrainConfig): Promise<TrainSnapshot> {
     return this.req<TrainSnapshot>("/train", { method: "POST", body: JSON.stringify(cfg) });

@@ -167,6 +167,12 @@ def test_predict_with_trained_model(client, monkeypatch):
     assert len(probs) == 5 and probs == sorted(probs, reverse=True) and 0 < sum(probs) <= 1.0001
     assert body["n_tokens"] == 3 and body["model"]["name"] == "MLP"
     assert client.post("/api/samples/cf-03/predict", json={"geometry": {"type": "point", "x": 0.1, "y": 0.1}}).status_code == 422
+    r = client.post("/api/samples/cf-03/probe", json={"geometry": box})
+    assert r.status_code == 200, r.text
+    pv = r.json()
+    assert pv["input"]["dim"] == 3584 and len(pv["input"]["preview"]) == 256
+    assert pv["sizes"][0] == 3584 and len(pv["layers"]) == len(pv["sizes"]) - 2
+    assert len(pv["layers"][0]["values"]) == pv["sizes"][1] and abs(sum(o["prob"] for o in pv["output"]) - 1) < 1e-3
 
 
 def test_interactive_training_on_a_tiny_split(client, tmp_path, monkeypatch):

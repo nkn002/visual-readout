@@ -82,3 +82,51 @@ def predict(vector: list[float], k: int = 5) -> list[dict]:
         p = torch.softmax(model(torch.tensor([vector], dtype=torch.float32)), dim=1)[0]
     top = p.topk(min(k, len(p)))
     return [{"label": classes[i], "prob": round(float(v), 4)} for v, i in zip(top.values.tolist(), top.indices.tolist())]
+
+
+def explain(vector: list[float], preview: int = 256) -> dict:
+    """Every stage of the probe for one region vector, for the "Visualize the probe" view.
+
+    input:  the standardized vector, averaged in `preview` equal chunks so the browser draws a small grid
+    layers: each hidden layer's post-activation values (dropout is off at inference)
+    output: logits and softmax probabilities for every category
+    """
+    import torch
+    from torch import nn
+
+    if _override:
+        model, classes = _override["model"], _override["classes"]
+    else:
+        model, ckpt = load()
+        classes = ckpt["classes"]
+    model.eval()
+    x = torch.tensor([vector], dtype=torch.float32)
+    z = (x - model.mean) / model.std
+    stages, h = [], z
+    with torch.no_grad():
+        mods = list(model.net)
+        for i, m in enumerate(mods):
+            h = m(h)
+            nxt = mods[i + 1] if i + 1 < len(mods) else None
+            if isinstance(m, nn.Linear) and nxt is not None and not isinstance(nxt, nn.Linear):
+                continue  # report after the activation, not between Linear and activation
+            if not isinstance(m, nn.Linear) and not isinstance(m, nn.Dropout):
+                v = h[0]
+                stages.append({"name": f"hidden layer {len(stages) + 1}", "size": int(v.numel()),
+                               "activation": model.config["activation"], "values": [round(float(a), 4) for a in v.tolist()],
+                               "active": int((v > 0).sum())})
+        logits = h[0]
+        probs = torch.softmax(logits, dim=0)
+    d = z.shape[1]
+    k = max(1, d // preview)
+    chunks = z[0, : k * (d // k)].reshape(-1, k).mean(1)
+    sizes = [model.config["d_in"], *model.config["hidden"], model.config["n_classes"]]
+    return {
+        "input": {"dim": d, "norm": float(x.norm()), "chunk": k, "preview": [round(float(a), 3) for a in chunks.tolist()]},
+        "layers": stages,
+        "sizes": sizes,
+        "activation": model.config["activation"],
+        "dropout": model.config["dropout"],
+        "output": [{"label": c, "logit": round(float(l), 3), "prob": round(float(p), 4)} for c, l, p in zip(classes, logits.tolist(), probs.tolist())],
+        "model": override_label() or "MLP (shipped)",
+    }

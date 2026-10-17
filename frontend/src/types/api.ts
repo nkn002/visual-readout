@@ -144,3 +144,16 @@ export interface TrainSnapshot {
   in_use: boolean;
   stopping?: boolean;
 }
+
+// ---- "Visualize the probe": every stage for one region ----
+export interface ProbeView {
+  input: { dim: number; norm: number; chunk: number; preview: number[] };
+  layers: { name: string; size: number; activation: string; values: number[]; active: number }[];
+  sizes: number[];
+  activation: string;
+  dropout: number;
+  output: { label: string; logit: number; prob: number }[];
+  model: string;
+  n_tokens: number;
+  layer: number;
+}

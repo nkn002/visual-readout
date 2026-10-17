@@ -267,3 +267,16 @@ table.metrics tr.ours td { font-weight: 600; }
 .examples li.ok .mark { color: var(--yes); }
 .examples li.bad .mark { color: var(--no); }
 .examples .ph { color: var(--muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+/* "Visualize the probe" */
+.pipeline { display: grid; grid-template-columns: minmax(0, 1fr) 24px minmax(0, 1.3fr) 24px minmax(0, 1fr); gap: 8px; align-items: start; }
+.pipeline .arrow { font-size: 22px; color: var(--muted); align-self: center; text-align: center; }
+.stage-col h3 { margin-top: 0; }
+.stage-col .crop { width: 100%; max-height: 160px; background-repeat: no-repeat; border: 2px solid var(--human); border-radius: 3px; margin-bottom: 6px; }
+.vgrid { display: grid; gap: 1px; margin: 6px 0; }
+.vgrid span { aspect-ratio: 1; border-radius: 1px; background: var(--bg); }
+.layers { list-style: none; padding: 0; margin: 0; display: grid; gap: 6px; }
+.layers li { display: flex; flex-direction: column; gap: 2px; padding: 6px 8px; border: 1px solid var(--line); border-radius: 4px; font-size: 12px; background: var(--bg); }
+.layers .lname { font-weight: 600; font-size: 13px; }
+.topk li.winner .name { font-weight: 700; }
+@media (max-width: 900px) { .pipeline { grid-template-columns: 1fr; } .pipeline .arrow { transform: rotate(90deg); } }

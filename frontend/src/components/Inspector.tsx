@@ -2,8 +2,9 @@ import { useEffect, useRef, useState } from "react";
 import { useDataSource } from "../api/source";
 import { useDefaultPredictions, useDescribeRegion, useImportAnnotations, usePredictRegion, useUpdateAnnotation } from "../api/hooks";
 import { TopClasses } from "./TopClasses";
+import { ProbeViewPanel } from "./ProbeViewPanel";
 import { MentionTags } from "../features/annotate/MentionTags";
-import type { Annotation, AnnotationCreate, Arm, ConditionKey, Dataset, Geometry, PredictResult, Sample, Verdict } from "../types/api";
+import type { Annotation, AnnotationCreate, Arm, ConditionKey, Dataset, Geometry, PredictResult, ProbeView, Sample, Verdict } from "../types/api";
 
 interface Props {
   sample: Sample | null;
@@ -91,6 +92,16 @@ export function Inspector(p: Props) {
   const predictMut = usePredictRegion(sample?.id);
   const defaults = useDefaultPredictions();
   const [preds, setPreds] = useState<Record<string, PredictResult | { error: string } | "loading">>({});
+  const [probe, setProbe] = useState<{ ann: Annotation; state: "loading" | "ready" | "error"; data?: ProbeView; error?: string } | null>(null);
+  const showProbe = async (r: Annotation) => {
+    setProbe({ ann: r, state: "loading" });
+    try {
+      const data = await src.probeRegion(sample!.id, r.geometry);
+      setProbe({ ann: r, state: "ready", data });
+    } catch (e) {
+      setProbe({ ann: r, state: "error", error: (e as Error).message });
+    }
+  };
   const predict = async (r: Annotation) => {
     setPreds((m) => ({ ...m, [r.id]: "loading" }));
     try {
@@ -148,6 +159,18 @@ export function Inspector(p: Props) {
 
   return (
     <aside className="inspector">
+      {probe && probe.ann.geometry.type === "bbox" && (
+        <ProbeViewPanel
+          label={probe.ann.label}
+          sample={sample}
+          box={probe.ann.geometry}
+          imageUrl={src.fileUrl(sample, condition)}
+          state={probe.state}
+          data={probe.data}
+          error={probe.error}
+          onClose={() => setProbe(null)}
+        />
+      )}
       <section>
         <h2>Image</h2>
         <dl className="kv">
@@ -191,6 +214,9 @@ export function Inspector(p: Props) {
                 </button>
                 <button type="button" className="ask predict" disabled={preds[a.id] === "loading"} onClick={() => void predict(a)} title="Classify this region with the trained MLP (20 categories)">
                   {preds[a.id] === "loading" ? "Predicting…" : "Predict"}
+                </button>
+                <button type="button" className="ask predict" onClick={() => void showProbe(a)} title="Show the input, the probe's layers and the output for this region">
+                  Visualize the probe
                 </button>
                 <button
                   type="button"
