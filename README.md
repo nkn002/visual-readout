@@ -475,7 +475,7 @@ Claude (Anthropic), an AI coding agent, wrote the code in `training/` and the HW
 
 ## HW3: attention pooling for the region probe
 
-The 2-page experiment report is [docs/hw3/report.pdf](docs/hw3/report.pdf). The hypothesis and predictions in [docs/hw3/hypothesis.md](docs/hw3/hypothesis.md) were committed at 15:02 on 2026-11-09 (commit `c03e240`), before token extraction finished and before any arm trained. The first result file is from 15:37.
+The 2-page experiment report is [docs/hw3/report.pdf](docs/hw3/report.pdf), built from [docs/hw3/latex/main.tex](docs/hw3/latex/main.tex). The hypothesis and predictions in [docs/hw3/hypothesis.md](docs/hw3/hypothesis.md) were committed at 15:02 on 2026-11-09 (commit `c03e240`), before token extraction finished and before any arm trained. The first result file is from 15:37.
 
 ### Task and dataset
 
