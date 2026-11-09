@@ -124,8 +124,12 @@ def train_one(arm: str, cfg: dict, data: Data, K: int, seed: int, log=print) -> 
     g = torch.Generator().manual_seed(seed)
     tr = data.idx["train"]
     history, best, best_state, bad = [], float("inf"), None, 0
-    torch.cuda.reset_peak_memory_stats() if data.device.type == "cuda" else None
+    data.means()
+    if data.device.type == "cuda":
+        torch.cuda.synchronize(); torch.cuda.reset_peak_memory_stats()
+        resident = torch.cuda.memory_allocated()
     t_train = 0.0
+    att_slice = data.idx["val"][data.len[data.idx["val"]] > 1][:1000]
     for epoch in range(1, cfg["epochs"] + 1):
         model.train()
         order = tr[torch.randperm(len(tr), generator=g).to(tr.device)]
@@ -140,8 +144,12 @@ def train_one(arm: str, cfg: dict, data: Data, K: int, seed: int, log=print) -> 
             torch.cuda.synchronize()
         t_train += time.time() - t0
         trm, vam = evaluate(model, data, "train", K), evaluate(model, data, "val", K)
-        history.append({"epoch": epoch, "train_loss": trm["loss"], "val_loss": vam["loss"], "train_acc": trm["acc"], "val_acc": vam["acc"]})
-        log(f"    {arm} lr {cfg['lr']} wd {cfg['weight_decay']} seed {seed} | epoch {epoch:2d} train {trm['loss']:.3f}/{trm['acc']:.3f} val {vam['loss']:.3f}/{vam['acc']:.3f}")
+        row = {"epoch": epoch, "train_loss": trm["loss"], "val_loss": vam["loss"], "train_acc": trm["acc"], "val_acc": vam["acc"]}
+        if model.pooling == "attn":
+            row["val_attn_norm_entropy"] = attention_stats(model, data, regions=att_slice)["norm_entropy_mean"]
+        history.append(row)
+        log(f"    {arm} lr {cfg['lr']} wd {cfg['weight_decay']} seed {seed} | epoch {epoch:2d} train {trm['loss']:.3f}/{trm['acc']:.3f} val {vam['loss']:.3f}/{vam['acc']:.3f}"
+            + (f" attn entropy {row['val_attn_norm_entropy']:.3f}" if "val_attn_norm_entropy" in row else ""))
         if vam["loss"] < best - 1e-4:
             best, best_state, bad = vam["loss"], copy.deepcopy(model.state_dict()), 0
         else:
@@ -150,20 +158,23 @@ def train_one(arm: str, cfg: dict, data: Data, K: int, seed: int, log=print) -> 
                 break
     model.load_state_dict(best_state)                                        # 7. keep the best validation epoch
     cost = {"params": sum(p.numel() for p in model.parameters()), "sec_per_epoch": round(t_train / len(history), 2),
-            "peak_mem_mb": round(torch.cuda.max_memory_allocated() / 2**20) if data.device.type == "cuda" else None,
+            "peak_mem_mb_above_data": round((torch.cuda.max_memory_allocated() - resident) / 2**20) if data.device.type == "cuda" else None,
             "epochs": len(history), "best_epoch": int(np.argmin([h["val_loss"] for h in history]) + 1)}
     return model, history, cost
 
 
 @torch.no_grad()
-def attention_stats(model: RegionProbe, data: Data, split: str = "test") -> dict:
-    """How far learned attention moved from the mean pool: normalized entropy (1 = uniform) and top-token weight."""
+def attention_stats(model: RegionProbe, data: Data, split: str = "test", regions: torch.Tensor | None = None) -> dict:
+    """How far learned attention moved from the mean pool, on regions with more than one token:
+    normalized entropy (1 = uniform), top weight relative to uniform, and how often the top token is the box's
+    first token in raster order (a position lock; chance = mean of 1/L)."""
     if model.pooling != "attn":
         return {}
+    was_training = model.training
     model.eval()
-    reg = data.idx[split]
+    reg = regions if regions is not None else data.idx[split]
     reg = reg[data.len[reg] > 1]
-    ents, tops = [], []
+    ents, tops, first, chance = [], [], [], []
     for i in range(0, len(reg), 1024):
         r = reg[i:i + 1024]
         t, seg = data.gather(r)
@@ -173,9 +184,18 @@ def attention_stats(model: RegionProbe, data: Data, split: str = "test") -> dict
         ents.append((ent / torch.log(L)[:, None]).mean(1))
         top = torch.zeros((len(r), w.shape[1]), device=w.device).scatter_reduce(0, seg[:, None].expand(-1, w.shape[1]), w, "amax", include_self=True)
         tops.append((top * L[:, None]).mean(1))  # top weight relative to uniform (1 = uniform)
+        first_w = w[torch.cumsum(data.len[r], 0) - data.len[r]]  # weight of each box's first token [n, H]
+        sharp = (top * L[:, None]).mean(1) > 1.05                   # only where attention moved from uniform; ties are meaningless
+        first.append(((first_w >= top - 1e-9).float().mean(1))[sharp])
+        chance.append((1.0 / L)[sharp])
     e, tp = torch.cat(ents).cpu().numpy(), torch.cat(tops).cpu().numpy()
+    model.train(was_training)
     return {"norm_entropy_mean": float(e.mean()), "norm_entropy_median": float(np.median(e)),
-            "top_weight_vs_uniform_median": float(np.median(tp)), "n_regions": int(len(e))}
+            "top_weight_vs_uniform_median": float(np.median(tp)),
+            "first_token_is_top": float(torch.cat(first).mean()) if torch.cat(first).numel() else None,
+            "first_token_chance": float(torch.cat(chance).mean()) if torch.cat(chance).numel() else None,
+            "n_sharp_regions": int(torch.cat(first).numel()),
+            "n_regions": int(len(e))}
 
 
 def paired_bootstrap(a: list[int], b: list[int], n: int = 2000, seed: int = 0) -> dict:
@@ -216,7 +236,11 @@ def main() -> None:
     ap.add_argument("--synthetic", action="store_true")
     ap.add_argument("--out", default=str(ROOT / "results" / "hw3"))
     ap.add_argument("--arms", default="all", help="comma-separated arm indices (0-5) or 'all'")
+    ap.add_argument("--merge", action="store_true", help="only rebuild results.json from the saved arms")
     a = ap.parse_args()
+    if a.merge:
+        merge(Path(a.out))
+        return
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     data, classes, lens = load(a, device)
     K = len(classes)
@@ -226,7 +250,7 @@ def main() -> None:
     if a.synthetic:
         BASE["epochs"] = 3
 
-    report = {"classes": classes, "n": {s: int(len(data.idx[s])) for s in data.idx}, "budget": {"grid": GRID, **BASE},
+    report = {"classes": classes, "n": {s: int(len(data.idx[s])) for s in data.idx}, "budget": {"grid": GRID, **BASE}, "seeds": [0, 1, 2],
               "token_count": {"median": float(np.median(lens)), "mean": float(np.mean(lens)), "share_single_token": float(np.mean(lens == 1))},
               "arms": {}}
     for arm in arms:
@@ -243,7 +267,7 @@ def main() -> None:
             m, h, cost = train_one(arm, best["config"], data, K, seed=s, log=lambda *x: None)
             seeds.append({"seed": s, "model": m, "history": h, "cost": cost})
         tests = [evaluate(sd["model"], data, "test", K) for sd in seeds]
-        report["arms"][arm] = {
+        arm_report = {
             "config": best["config"], "grid": [{k: v for k, v in r.items() if not k.startswith("_")} for r in runs],
             "cost": best["cost"], "history": best["_h"],
             "train": {k: v for k, v in evaluate(best["_m"], data, "train", K).items() if k != "correct"},
@@ -251,19 +275,45 @@ def main() -> None:
             "test_seeds": [{k: v for k, v in t.items() if k != "correct"} for t in tests],
             "test_acc_mean": float(np.mean([t["acc"] for t in tests])), "test_acc_std": float(np.std([t["acc"] for t in tests])),
             "test_f1_mean": float(np.mean([t["macro_f1"] for t in tests])),
-            "_correct": tests[0]["correct"], "attention": attention_stats(best["_m"], data),
+            "seed_costs": [sd["cost"] for sd in seeds], "attention": attention_stats(best["_m"], data),
         }
-        print(f"== {arm}: test acc {report['arms'][arm]['test_acc_mean']:.4f} ± {report['arms'][arm]['test_acc_std']:.4f} over {len(tests)} seeds", flush=True)
+        i_arm = list(ARMS).index(arm)
+        (out / f"arm_{i_arm}.json").write_text(json.dumps({"arm": arm, **arm_report}, indent=1))
+        np.savez(out / f"arm_{i_arm}_correct.npz", correct=np.array([t["correct"] for t in tests], dtype=np.int8))
+        print(f"== {arm}: test acc {arm_report['test_acc_mean']:.4f} ± {arm_report['test_acc_std']:.4f} over {len(tests)} seeds -> arm_{i_arm}.json", flush=True)
         if arm == "attention 1 head, 1 hidden" and not a.synthetic:
             torch.save({"config": best["_m"].config, "state_dict": {k: v.cpu() for k, v in best["_m"].state_dict().items()}}, out / "best_attn1.pt")
-    base = "mean, 1 hidden (HW2)"
-    for arm in report["arms"]:
-        if base in report["arms"] and arm != base:
-            report["arms"][arm]["gap_vs_hw2_seed0"] = paired_bootstrap(report["arms"][arm]["_correct"], report["arms"][base]["_correct"])
-    for arm in report["arms"]:
-        report["arms"][arm].pop("_correct")
+    merge(out, report)
+
+
+CONTRASTS = [  # (name, arm A, arm B): A minus B, test accuracy, seed-averaged per item
+    ("attention (1 head) vs mean, 1 hidden", "attention 1 head, 1 hidden", "mean, 1 hidden (HW2)"),
+    ("attention (1 head) vs mean, 2 hidden", "attention 1 head, 2 hidden", "mean, 2 hidden"),
+    ("attention (8 heads) vs mean, 1 hidden", "attention 8 heads, 1 hidden", "mean, 1 hidden (HW2)"),
+    ("attention (8 heads) vs mean, 2 hidden", "attention 8 heads, 2 hidden", "mean, 2 hidden"),
+    ("2 vs 1 hidden layers, mean pool", "mean, 2 hidden", "mean, 1 hidden (HW2)"),
+    ("2 vs 1 hidden layers, attention 1 head", "attention 1 head, 2 hidden", "attention 1 head, 1 hidden"),
+    ("8 vs 1 heads, 1 hidden", "attention 8 heads, 1 hidden", "attention 1 head, 1 hidden"),
+    ("8 vs 1 heads, 2 hidden", "attention 8 heads, 2 hidden", "attention 1 head, 2 hidden"),
+    ("user's full design vs HW2", "attention 1 head, 2 hidden", "mean, 1 hidden (HW2)"),
+]
+
+
+def merge(out: Path, report: dict | None = None) -> None:
+    """Build results.json from every arm_<i>.json present, with the 2x2 contrasts as paired bootstraps."""
+    report = report or {}
+    if not report.get("classes"):
+        report["classes"] = json.loads((ROOT / "backend" / "model" / "classes.json").read_text())["classes"]
+    report["arms"], correct = {}, {}
+    for i, arm in enumerate(ARMS):
+        f = out / f"arm_{i}.json"
+        if f.exists():
+            r = json.loads(f.read_text()); r.pop("arm", None)
+            report["arms"][arm] = r
+            correct[arm] = np.load(out / f"arm_{i}_correct.npz")["correct"].astype(float).mean(0)  # seed-averaged
+    report["contrasts"] = {name: paired_bootstrap(correct[a], correct[b]) for name, a, b in CONTRASTS if a in correct and b in correct}
     (out / "results.json").write_text(json.dumps(report, indent=1))
-    print(f"-> {out / 'results.json'}")
+    print(f"-> {out / 'results.json'} ({len(report['arms'])} arms, {len(report['contrasts'])} contrasts)")
 
 
 if __name__ == "__main__":
