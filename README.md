@@ -2,7 +2,9 @@
 
 A web viewer for one kind of research data: a photo, a region of that photo, and what a vision-language model says about that region.
 
-Live: **https://nkn002.github.io/visual-readout/** · DS7400 Deep Learning, Homeworks 1 and 2 · Author: Khai-Nguyen Nguyen
+Live: **https://nkn002.github.io/visual-readout/** · DS7400 Deep Learning, Homeworks 1, 2 and 3 · Author: Khai-Nguyen Nguyen
+
+HW3 graders: the design challenge is in [HW3: attention pooling for the region probe](#hw3-attention-pooling-for-the-region-probe) and in [docs/hw3/report.pdf](docs/hw3/report.pdf).
 
 ## The goal
 
@@ -500,7 +502,7 @@ The 2-page experiment report is [docs/hw3/report.pdf](docs/hw3/report.pdf). The 
 
 **Six arms separate the two changes.** Pooling {mean, attention with 1 head, attention with 8 heads} crosses depth {1 hidden layer, 2 hidden layers}. The author's design is "attention 1 head, 2 hidden". The 8-head arms and the "mean, 2 hidden" arm are the ablations.
 
-**Every arm gets the same budget.** Each arm uses Adam over learning rate {3e-4, 1e-3} × weight decay {1e-4, 1e-3}, with batch 256 and at most 50 epochs. Early stopping watches validation loss with patience 5. Each arm keeps its best setting on validation accuracy and reruns it with 3 seeds. The test set is scored only for the selected setting. Contrasts are paired bootstraps over test regions on seed-averaged correctness, so their intervals leave out training-seed variance.
+**Every arm gets the same budget.** Each arm uses Adam over learning rate {3e-4, 1e-3} × weight decay {1e-4, 1e-3}, with batch 256 and at most 50 epochs. Early stopping watches validation loss with patience 5. Each arm keeps its best setting on validation accuracy and reruns it with 3 seeds. The test set is scored only for the selected setting. Contrasts are paired bootstraps over test regions on seed-averaged correctness, so their intervals leave out training-seed variance. The 1-hidden arms all selected learning rate 3e-4 and weight decay 1e-3. At 2 hidden layers the mean arm selected weight decay 1e-4 and the attention arms 1e-3, so those contrasts also differ in weight decay.
 
 ### Run the experiments
 
@@ -545,9 +547,11 @@ $PY training/hw3_figures.py                                           # docs/hw3
 
 **Eight heads beat the mean pool at both depths, and one head did not.** The 8-head gain is 0.86 points at one hidden layer and 0.97 at two. The best arm, 8 heads with 2 hidden layers, scores 75.07% against 73.62% for HW2.
 
-**The 8-head arms also gained on one-token boxes, where attention cannot act.** On a one-token box the softmax gives weight 1, so attention returns the token itself and the MLP input equals HW2's. Yet 8 heads with 1 hidden layer gains 1.30 points there [+0.04, +2.61], at HW2's depth. Its gain on boxes with more than one token is 0.77 points [+0.17, +1.39], no larger. These data therefore do not show that the 8-head gain comes from re-weighting tokens. Two hypotheses remain open. First, training the shared MLP on attention-pooled vectors may change what it learns for every input. Second, the intervals leave out training-seed variance, and HW2's own seeds span 73.09% to 73.90%.
+**The 8-head arms also gained on one-token boxes, where attention cannot act.** On a one-token box the softmax gives weight 1, so attention returns the token itself and the MLP input equals HW2's. Yet 8 heads with 1 hidden layer gains 1.30 points there [+0.04, +2.61], at HW2's depth and with HW2's learning rate and weight decay. Its gain on all boxes with more than one token is 0.77 points [+0.17, +1.39], no larger. The lower bound of +0.04 is borderline, since it is one of about 30 box-size contrasts. Still, part of the 8-head gain appears where attention cannot act, so these data do not show that the whole gain comes from re-weighting tokens. Two hypotheses remain open. First, training the shared MLP on attention-pooled vectors may change what it learns for every input. Second, the intervals leave out training-seed variance, and HW2's own seeds span 73.09% to 73.90%.
 
 **Gains concentrate on boxes of 50 or more tokens, but depth alone shows the same pattern.** There the attention arms gain 1.8 to 2.9 points, and the depth-only arm gains 1.54 [+0.41, +2.74]. The 10–49 token bin moves by 0.3 points or less, except for the 8-head, 2-hidden arm.
+
+**One head at HW2's depth shows the pattern that predictions 1 and 2 named in advance.** It changes one-token boxes by +0.08 [−1.23, +1.42] and gains +1.80 [+0.26, +3.34] on boxes of 50 or more tokens. The depth-only arm shows a similar pattern by box size, and the per-bin contrast of 1-head attention against the mean at 2 hidden layers was not computed.
 
 ![Recall change per category](docs/hw3/recall_delta.png)
 
@@ -564,7 +568,7 @@ $PY training/hw3_figures.py                                           # docs/hw3
 ### What the experiment taught
 
 - **The depth-only control changed the conclusion.** Without the "mean, 2 hidden" arm, the design's +0.71 would read as an attention effect.
-- **The one-token boxes served as a built-in placebo.** They caught a gain that appears where attention cannot act, which a single accuracy number hides.
+- **The one-token boxes served as a built-in placebo.** They caught part of a gain appearing where attention cannot act, which a single accuracy number hides.
 - **Eight heads gave the only attention effect whose interval excludes zero at both depths.** The placebo result above still leaves the cause of that effect open.
 - **The attention weights did not fix the class they targeted.** Better pooling may need a different signal, such as supervision on which tokens show the object. This is an idea, not a tested result.
 
