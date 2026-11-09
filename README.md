@@ -506,8 +506,6 @@ The experiment report is [docs/hw3/report.pdf](docs/hw3/report.pdf), built from 
 3. A second hidden layer improves accuracy through extra capacity.
 4. 8-head attention pooling beats 1-head attention pooling, also through extra capacity.
 
-[docs/hw3/hypothesis.md](docs/hw3/hypothesis.md) holds an earlier draft of these predictions, committed before training. The report's four expectations are the final framing, and expectation 3 differs from that draft, which expected the second layer to add overfitting only.
-
 **Every probe gets the same budget.** Each uses Adam over learning rate {3e-4, 1e-3} × weight decay {1e-4, 1e-3}, with batch 256, dropout 0.5 and early stopping on validation loss. Each keeps its best setting on validation accuracy and reruns it with 3 seeds. The test set is scored only for that setting. Intervals are 95% paired bootstraps over test regions on seed-averaged correctness, so they leave out training-seed variance.
 
 ### Run the experiments
@@ -560,9 +558,13 @@ Three more measurements support the same reading:
 
 - **The attention weights stay close to uniform.** On test boxes with more than one token, normalized entropy is 0.90 to 0.95, where 1 means uniform. The top token gets 2.0 to 2.9 times the uniform weight (median).
 - **Attention costs 3 to 12 times more training time per epoch** than the mean pool at the same depth, and it needs the 11.1 GB token store.
-- **Recall changes differ by category** ([recall_delta.png](docs/hw3/recall_delta.png)); the loss curves are in [curves.png](docs/hw3/curves.png) and example attention maps in [attention_maps.png](docs/hw3/attention_maps.png).
+- **Recall changes differ by category** ([recall_delta.png](docs/hw3/recall_delta.png)), and example attention maps are in [attention_maps.png](docs/hw3/attention_maps.png).
 
 ![Test accuracy by pooling and depth](docs/hw3/accuracy.png)
+
+![Training and validation loss per epoch for the six probes](docs/hw3/curves.png)
+
+**The probes with 2 hidden layers reach a lower validation loss and train for more epochs.** Their lowest validation loss is 0.85 to 0.89, against 0.93 to 0.97 for the probes with 1 hidden layer. Early stopping ends the 1-hidden probes after 9 to 12 epochs and the 2-hidden probes after 15 to 24. The curves show the selected setting of each probe at seed 0.
 
 ### What we learned
 

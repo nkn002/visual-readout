@@ -48,7 +48,7 @@
 \section{Hypothesis}
 \label{sec:hyp}
 
-\textbf{Problem.} In Homework 2, we trained an MLP probe (3584 $\to$ 512 $\to$ ReLU $\to$ 20) to classify a region's activation into one of 20 object categories.
+\textbf{Problem.} In Homework 2, we trained an MLP probe \citep{alain2017understanding} (3584 $\to$ 512 $\to$ ReLU $\to$ 20) to classify a region's activation into one of 20 object categories.
 For each Visual Genome bounding box \citep{krishna2017visual} we extract its corresponding activation from layer-20 of Qwen2.5-VL-7B-Instruct \citep{qwen2025qwen25technicalreport}. The probe input vector is the mean-pooled activation of the image tokens corresponding to this box (\cref{fig:mech}).
 This MLP probe reaches only 73.62\% test accuracy.
 We hypothesize that mean pooling causes part of this error, as it weights every token under the box equally.
