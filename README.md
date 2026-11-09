@@ -479,6 +479,10 @@ The 2-page experiment report is [docs/hw3/report.pdf](docs/hw3/report.pdf), buil
 
 ### Task and dataset
 
+![How the probe reads Qwen2.5-VL's hidden state](docs/hw3/latex/fig_mechanism.png)
+
+**The probe reads a frozen VLM's internal activations, not pixels.** Qwen2.5-VL-7B encodes the image and the prompt. The probe takes hidden state 21 (the output of layer 20) at the image tokens under the box, pools them, and classifies the result. The weights and probabilities in the figure come from the 1-head, 1-hidden-layer probe (seed 0) on one test region.
+
 **The HW3 probe solves the HW2 task on the HW2 data.** It names one of 20 semantic categories for a Visual Genome region from Qwen2.5-VL-7B's hidden state 21. The data are the same 50,000 regions, 2,500 per category, split by image into 39,968 train, 5,075 validation and 4,957 test regions (see the HW2 section above).
 
 **HW3 needs every token under each box, not their mean.** `training/extract_tokens.py` re-runs Qwen2.5-VL with the research extraction's prompt, layer and token rule and keeps the tokens. It stores 1,549,854 tokens, 11.1 GB in float16, under `/scratch` and outside git. Each region's token mean matches its stored HW2 vector at median cosine 0.9999, and all 50,000 token counts match. A box covers 1 to 1,672 tokens, with a median of 9. 18.5% of regions cover a single token.
