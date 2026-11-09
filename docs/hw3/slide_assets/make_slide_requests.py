@@ -234,8 +234,8 @@ def main() -> None:
     for k, (name, pv) in enumerate(TOP3):
         yy = yb + k * 10.5
         b3.shape(f"fc_p{k}", "RECTANGLE", 288, yy, max(1.5, 78 * pv), 8.5, fill="#EAC38D")
-        b3.text(f"fc_pl{k}", 290, yy + 6.3, name, 7)
-        b3.text(f"fc_pv{k}", 388, yy + 6.3, f"{pv:.2f}", 7, anchor="end")
+        b3.text(f"fc_pl{k}", 290, yy + 4.2, name, 7)
+        b3.text(f"fc_pv{k}", 388, yy + 4.2, f"{pv:.2f}", 7, anchor="end")
     g3 = list(b3.ids)
     b3.group("grp_panel1", g1[:-2])
     b3.group("grp_panel2", g2)
