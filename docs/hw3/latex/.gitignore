@@ -6,3 +6,5 @@
 *.synctex.gz
 build.log
 _mech/
+*.bbl
+*.blg

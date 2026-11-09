@@ -475,38 +475,40 @@ Claude (Anthropic), an AI coding agent, wrote the code in `training/` and the HW
 
 ## HW3: attention pooling for the region probe
 
-The 2-page experiment report is [docs/hw3/report.pdf](docs/hw3/report.pdf), built from [docs/hw3/latex/main.tex](docs/hw3/latex/main.tex). The hypothesis and predictions in [docs/hw3/hypothesis.md](docs/hw3/hypothesis.md) were committed at 15:02 on 2026-11-09 (commit `c03e240`), before token extraction finished and before any arm trained. The first result file is from 15:37.
+The experiment report is [docs/hw3/report.pdf](docs/hw3/report.pdf), built from [docs/hw3/latex/hw3_report.tex](docs/hw3/latex/hw3_report.tex). This section follows the report.
 
 ### Task and dataset
 
-![How the probe reads Qwen2.5-VL's hidden state](docs/hw3/latex/fig_mechanism.png)
+![How the probe reads Qwen2.5-VL's activations](docs/hw3/latex/fig_mechanism.png)
 
-**The probe reads a frozen VLM's internal activations, not pixels.** Qwen2.5-VL-7B encodes the image and the prompt. The probe takes hidden state 21 (the output of layer 20) at the image tokens under the box, pools them, and classifies the result. The weights and probabilities in the figure come from the 1-head, 1-hidden-layer probe (seed 0) on one test region.
+**The probe reads a frozen VLM's internal activations, not pixels.** Qwen2.5-VL-7B-Instruct encodes the image and the prompt. The probe takes the layer-20 activations at the image tokens under a Visual Genome bounding box and classifies the region into one of 20 object categories. In code, layer 20's output is `hidden_states[21]`.
 
-**The HW3 probe solves the HW2 task on the HW2 data.** It names one of 20 semantic categories for a Visual Genome region from Qwen2.5-VL-7B's hidden state 21. The data are the same 50,000 regions, 2,500 per category, split by image into 39,968 train, 5,075 validation and 4,957 test regions (see the HW2 section above).
+**HW3 uses the HW2 data.** The data are 50,000 regions, 2,500 per category, split by image into 39,968 train, 5,075 validation and 4,957 test regions (see the HW2 section above).
 
-**HW3 needs every token under each box, not their mean.** `training/extract_tokens.py` re-runs Qwen2.5-VL with the research extraction's prompt, layer and token rule and keeps the tokens. It stores 1,549,854 tokens, 11.1 GB in float16, under `/scratch` and outside git. Each region's token mean matches its stored HW2 vector at median cosine 0.9999, and all 50,000 token counts match. A box covers 1 to 1,672 tokens, with a median of 9. 18.5% of regions cover a single token.
+**HW3 needs every token under each box, not their mean.** `training/extract_tokens.py` re-runs Qwen2.5-VL and stores 1,549,854 tokens (11.1 GB, under `/scratch`, outside git). Each region's token mean matches its stored HW2 vector at median cosine 0.9999. A box covers 1 to 1,672 tokens, with a median of 9, and 18.5% of regions cover a single token.
 
 ### Baseline: the HW2 probe
 
-**The baseline averages the tokens under the box and classifies the mean.** Its MLP is 3584 → 512 → ReLU → dropout 0.5 → 20, the HW2 network, retrained here under the HW3 budget. Every token gets weight 1/L, whether it shows the object or the background.
+**The HW2 probe mean-pools the tokens under the box and classifies the mean with an MLP.** The MLP is 3584 → 512 → ReLU → 20. It reaches 73.62% test accuracy here. Mean pooling weights every token under the box equally, and we hypothesize that this causes part of the error.
 
 ### Proposed modification
 
 ![Baseline and proposed probe](docs/hw3/architecture.png)
 
-**The author's design replaces the mean with attention pooling and adds a second hidden layer** (`training/attention_probe.py`).
+**We replace mean pooling with attention pooling** (`training/attention_probe.py`). A learned query scores each standardized token, a softmax over the box turns the scores into weights, and the pooled vector is the weighted sum of the tokens. The query starts at zero, so training starts from the exact mean pool.
 
-1. **A learned query scores every token under the box.** A linear map turns each standardized token into a 64-number key, and the score is the key's dot product with the query. A softmax over the box turns the scores into weights, and the pooled vector is the weighted sum of the tokens.
-2. **The 8-head variant splits the vector into 8 slices of 448 numbers.** Each head has its own query and pools its own slice.
-3. **The MLP gets a second hidden layer:** 3584 → 512 → ReLU → 512 → ReLU → 20, with dropout 0.5 after each hidden layer.
-4. **The queries start at zero, so training starts from the exact HW2 mean pool.** Any departure from uniform weights has to be learned.
+**We add capacity in two more ways.** An 8-head variant gives each head its own query and its own 448-number slice of the vector. A second hidden layer makes the MLP 3584 → 512 → ReLU → 512 → ReLU → 20. Crossing pooling {mean, 1 head, 8 heads} with depth {1, 2 hidden layers} gives six probes.
 
-**The HW2 failure on person regions motivated the design.** Person recall was 50%, the lowest of the 20 categories. A person box often shows mostly a shirt, a face or an arm, so its mean vector mixes person with clothing, head and limb. Learned weights could favour the tokens that show the object. The second hidden layer adds non-linearity on the pooled vector.
+**We expect four things.**
 
-**Six arms separate the two changes.** Pooling {mean, attention with 1 head, attention with 8 heads} crosses depth {1 hidden layer, 2 hidden layers}. The author's design is "attention 1 head, 2 hidden". The 8-head arms and the "mean, 2 hidden" arm are the ablations.
+1. Accuracy does not change on one-token boxes, because attention pooling returns the same vector as mean pooling there.
+2. The gain from attention pooling grows with box size, because attention can focus on the more relevant activations.
+3. A second hidden layer improves accuracy through extra capacity.
+4. 8-head attention pooling beats 1-head attention pooling, also through extra capacity.
 
-**Every arm gets the same budget.** Each arm uses Adam over learning rate {3e-4, 1e-3} × weight decay {1e-4, 1e-3}, with batch 256 and at most 50 epochs. Early stopping watches validation loss with patience 5. Each arm keeps its best setting on validation accuracy and reruns it with 3 seeds. The test set is scored only for the selected setting. Contrasts are paired bootstraps over test regions on seed-averaged correctness, so their intervals leave out training-seed variance. The 1-hidden arms all selected learning rate 3e-4 and weight decay 1e-3. At 2 hidden layers the mean arm selected weight decay 1e-4 and the attention arms 1e-3, so those contrasts also differ in weight decay.
+[docs/hw3/hypothesis.md](docs/hw3/hypothesis.md) holds an earlier draft of these predictions, committed before training. The report's four expectations are the final framing, and expectation 3 differs from that draft, which expected the second layer to add overfitting only.
+
+**Every probe gets the same budget.** Each uses Adam over learning rate {3e-4, 1e-3} × weight decay {1e-4, 1e-3}, with batch 256, dropout 0.5 and early stopping on validation loss. Each keeps its best setting on validation accuracy and reruns it with 3 seeds. The test set is scored only for that setting. Intervals are 95% paired bootstraps over test regions on seed-averaged correctness, so they leave out training-seed variance.
 
 ### Run the experiments
 
@@ -514,73 +516,66 @@ The 2-page experiment report is [docs/hw3/report.pdf](docs/hw3/report.pdf), buil
 PY=/home/rbc5xp/.conda/envs/nnedit/bin/python
 $PY training/prepare_data.py                                          # data/raw/regions20.npz, as in HW2
 $PY training/extract_tokens.py --out /scratch/rbc5xp/visual-readout   # tokens under every box: about 45 min on one A40
-$PY training/train_hw3.py --tokens /scratch/rbc5xp/visual-readout     # six arms: about 5 min per three arms on one A40
+$PY training/train_hw3.py --tokens /scratch/rbc5xp/visual-readout     # six probes: about 5 min per three probes on one A40
 #   split over two GPUs: --arms 0,2,5 on one, --arms 1,3,4 on the other, then --merge
 $PY training/hw3_contrasts.py                                         # box-size and per-category intervals
 $PY training/hw3_figures.py                                           # docs/hw3/*.png
+$PY docs/hw3/latex/make_figures.py                                    # the report's box-size figure
 ```
 
-`train_hw3.py --synthetic` runs the whole pipeline on random data as a smoke test. The training loop is written out step by step in `train_one`: forward pass, cross-entropy, `loss.backward()`, Adam step. The attention arms hold all tokens on the GPU and need about 13 GB of GPU memory. Results land in `results/hw3/` (committed): one JSON per arm, per-item test correctness, `results.json` and the 1-head model `best_attn1.pt`.
+`train_hw3.py --synthetic` runs the whole pipeline on random data as a smoke test. The training loop is written out step by step in `train_one`: forward pass, cross-entropy, `loss.backward()`, Adam step. The attention probes hold all tokens on the GPU and need about 13 GB of GPU memory. Results are committed in `results/hw3/`: one JSON per probe, per-item test correctness, `results.json` and the 1-head model `best_attn1.pt`.
 
 ### Results
 
-| Arm | Test acc (3 seeds) | Test macro-F1 | Train acc | Params | s / epoch |
-|---|---|---|---|---|---|
-| mean, 1 hidden (HW2 baseline) | 73.62 ± 0.38 | 73.46 | 82.41 | 1,845,780 | 0.09 |
-| mean, 2 hidden | 74.10 ± 0.21 | 73.90 | 86.41 | 2,108,436 | 0.21 |
-| attention 1 head, 1 hidden | 74.10 ± 0.15 | 74.01 | 83.73 | 2,075,220 | 0.77 |
-| **attention 1 head, 2 hidden (proposed)** | 74.33 ± 0.08 | 74.16 | 83.90 | 2,337,876 | 0.69 |
-| attention 8 heads, 1 hidden | 74.48 ± 0.17 | 74.42 | 88.08 | 3,681,300 | 1.09 |
-| attention 8 heads, 2 hidden | **75.07 ± 0.25** | **74.92** | 83.10 | 3,943,956 | 1.23 |
+Test accuracy (%), mean ± std over 3 seeds. Gains are in points with 95% intervals.
 
-| Contrast (test accuracy, points) | Gap | 95% CI |
-|---|---|---|
-| proposed design vs HW2 | +0.71 | [+0.05, +1.32] |
-| depth only: mean, 2 hidden vs HW2 | +0.48 | [+0.01, +0.95] |
-| 1-head attention vs mean, both 2 hidden | +0.24 | [−0.40, +0.80] |
-| 8-head attention vs mean, 1 hidden | +0.86 | [+0.26, +1.43] |
-| 8-head attention vs mean, 2 hidden | +0.97 | [+0.40, +1.52] |
-| 8 heads vs 1 head, 2 hidden | +0.73 | [+0.24, +1.23] |
-| best arm (8 heads, 2 hidden) vs HW2 | +1.45 | [+0.82, +2.06] |
+| Pooling | 1 hidden layer | 2 hidden layers | Gain from the second layer |
+|---|---|---|---|
+| Mean pool | 73.62 ± 0.38 (HW2) | 74.10 ± 0.21 | +0.48 [+0.01, +0.95] |
+| Attention, 1 head | 74.10 ± 0.15 | 74.33 ± 0.08 | +0.23 [−0.29, +0.71] |
+| Attention, 8 heads | 74.48 ± 0.17 | **75.07 ± 0.25** | +0.59 [+0.09, +1.06] |
+
+| Probe | Parameters | Test acc | s / epoch |
+|---|---|---|---|
+| mean pool, 1 hidden (HW2) | 1,845,780 | 73.62 | 0.09 |
+| attention 1 head, 1 hidden | 2,075,220 | 74.10 | 0.77 |
+| mean pool, 2 hidden | 2,108,436 | 74.10 | 0.21 |
+| attention 1 head, 2 hidden | 2,337,876 | 74.33 | 0.69 |
+| attention 8 heads, 1 hidden | 3,681,300 | 74.48 | 1.09 |
+| attention 8 heads, 2 hidden | 3,943,956 | 75.07 | 1.23 |
+
+![Gain over HW2 by box size](docs/hw3/latex/fig_gain_by_box_size.png)
+
+**Prediction 1 holds for 1-head attention pooling but not for eight heads.** On one-token boxes, one head gains +0.08 points over HW2 [−1.23, +1.42]. Eight heads gain +1.30 on the same boxes [+0.04, +2.61]. We hypothesize that part of the 8-head gain comes from the jointly trained MLP or from seed variance, not from re-weighting tokens. HW2's own seeds span 73.09% to 73.90%.
+
+**Prediction 2 holds only for the largest boxes.** One head gains at most +0.29 points on boxes of 2 to 49 tokens and +1.80 on boxes of 50 or more [+0.26, +3.34]. The gain does not grow steadily with box size. The mean pool with 2 hidden layers also gains +1.54 on these large boxes [+0.41, +2.74], so the gain is not specific to attention.
+
+**Prediction 3 holds: a second hidden layer improves the mean-pool probe.** It reaches 74.10%, +0.48 points over HW2. One head with 2 hidden layers gains +0.71 over HW2 [+0.05, +1.32], so one-head attention adds only +0.24 at the same depth [−0.40, +0.80].
+
+**Prediction 4 holds: eight heads match or beat one head.** Eight heads gain +0.73 points over one head with 2 hidden layers [+0.24, +1.23] and +0.38 with 1 hidden layer [−0.15, +0.89]. The best probe, 8 heads with 2 hidden layers, reaches 75.07%, +1.45 over HW2 [+0.82, +2.06]. Part of this gain appears on one-token boxes, so we cannot attribute all of it to attention.
+
+**Test accuracy never falls as the parameter count grows across the six probes** (second table). This is consistent with the report's conclusion that extra capacity drives the gain. Six probes cannot separate capacity from the kind of layer that adds it.
+
+Three more measurements support the same reading:
+
+- **The attention weights stay close to uniform.** On test boxes with more than one token, normalized entropy is 0.90 to 0.95, where 1 means uniform. The top token gets 2.0 to 2.9 times the uniform weight (median).
+- **Attention costs 3 to 12 times more training time per epoch** than the mean pool at the same depth, and it needs the 11.1 GB token store.
+- **Recall changes differ by category** ([recall_delta.png](docs/hw3/recall_delta.png)); the loss curves are in [curves.png](docs/hw3/curves.png) and example attention maps in [attention_maps.png](docs/hw3/attention_maps.png).
 
 ![Test accuracy by pooling and depth](docs/hw3/accuracy.png)
 
-![Gain over HW2 by box size](docs/hw3/gain_by_box_size.png)
+### What we learned
 
-**The proposed design beats HW2 by 0.71 points, and its second hidden layer carries most of that gain.** The second hidden layer alone, on the mean pool, adds 0.48 points. One-head attention on top of the same depth adds 0.24 points, with an interval that includes zero.
+- **Adding capacity to the HW2 probe improves test accuracy.** A second hidden layer and eight attention heads both contribute, and the best probe gains +1.45 points.
+- **The results do not show that attention helps by focusing on the relevant tokens.** One head adds +0.24 points at the same depth, and eight heads gain on boxes where attention has nothing to re-weight.
+- **The report reads the gain as an effect of extra capacity,** consistent with scaling laws for neural networks (Kaplan et al., 2020). This is an interpretation, not a tested claim.
+- **Two controls shaped the conclusion:** the mean pool with 2 hidden layers and the one-token boxes. Without them, the gain would read as an attention effect.
 
-**Eight heads beat the mean pool at both depths, and one head did not.** The 8-head gain is 0.86 points at one hidden layer and 0.97 at two. The best arm, 8 heads with 2 hidden layers, scores 75.07% against 73.62% for HW2.
-
-**The 8-head arms also gained on one-token boxes, where attention cannot act.** On a one-token box the softmax gives weight 1, so attention returns the token itself and the MLP input equals HW2's. Yet 8 heads with 1 hidden layer gains 1.30 points there [+0.04, +2.61], at HW2's depth and with HW2's learning rate and weight decay. Its gain on all boxes with more than one token is 0.77 points [+0.17, +1.39], no larger. The lower bound of +0.04 is borderline, since it is one of about 30 box-size contrasts. Still, part of the 8-head gain appears where attention cannot act, so these data do not show that the whole gain comes from re-weighting tokens. Two hypotheses remain open. First, training the shared MLP on attention-pooled vectors may change what it learns for every input. Second, the intervals leave out training-seed variance, and HW2's own seeds span 73.09% to 73.90%.
-
-**Gains concentrate on boxes of 50 or more tokens, but depth alone shows the same pattern.** There the attention arms gain 1.8 to 2.9 points, and the depth-only arm gains 1.54 [+0.41, +2.74]. The 10–49 token bin moves by 0.3 points or less, except for the 8-head, 2-hidden arm.
-
-**One head at HW2's depth shows the pattern that predictions 1 and 2 named in advance.** It changes one-token boxes by +0.08 [−1.23, +1.42] and gains +1.80 [+0.26, +3.34] on boxes of 50 or more tokens. The depth-only arm shows a similar pattern by box size, and the per-bin contrast of 1-head attention against the mean at 2 hidden layers was not computed.
-
-![Recall change per category](docs/hw3/recall_delta.png)
-
-**Person recall, the motivation for the design, did not improve.** The proposed design changes it by −2.3 points [−5.9, +1.2], and the best arm by −0.3 [−3.9, +3.3]. Clothing gains in both 2-hidden attention arms: +3.2 [+0.3, +6.1] and +6.8 [+3.3, +10.3]. Window and door, street and road, and furniture gain in every attention arm, and the depth-only arm also gains on the first two. With 20 categories, about one category per arm would exclude zero by chance.
-
-![Where the 1-head probe looks](docs/hw3/attention_maps.png)
-
-**Attention moved away from the mean pool but stayed diffuse.** On test boxes with more than one token, normalized attention entropy is 0.90 to 0.95, where 1 means uniform weights. The top token gets 2.0 to 2.9 times the uniform weight (medians). Validation entropy falls over training, for example from 0.99 to 0.86 for the 8-head, 2-hidden arm. The box's first token is the top token in 15–18% of boxes against 13–14% by chance. That rate sits only slightly above chance, so the strong position lock seen in the research project did not reappear.
-
-**Attention costs 3 to 12 times more training time per epoch than the mean pool at the same depth.** An epoch takes 0.69 to 1.23 s against 0.09 s (1 hidden) and 0.21 s (2 hidden) for the mean pool. The attention arms use about 1.6 GB of GPU memory above the stored tokens against under 0.1 GB, and they need the 11.1 GB token store instead of one vector per region.
-
-![Loss curves](docs/hw3/curves.png)
-
-### What the experiment taught
-
-- **The depth-only control changed the conclusion.** Without the "mean, 2 hidden" arm, the design's +0.71 would read as an attention effect.
-- **The one-token boxes served as a built-in placebo.** They caught part of a gain appearing where attention cannot act, which a single accuracy number hides.
-- **Eight heads gave the only attention effect whose interval excludes zero at both depths.** The placebo result above still leaves the cause of that effect open.
-- **The attention weights did not fix the class they targeted.** Better pooling may need a different signal, such as supervision on which tokens show the object. This is an idea, not a tested result.
-
-The app's **Predict** button still serves the HW2 probe. Serving the attention probe would need the model server to return every token under the box, and that change is not made.
+The app's **Predict** button still serves the HW2 probe. Serving an attention probe would need the model server to return every token under the box.
 
 ### Use of AI
 
-Claude (Anthropic), an AI coding agent, wrote `extract_tokens.py`, `attention_probe.py`, `train_hw3.py`, `hw3_contrasts.py` and the figure scripts. It also drafted the hypothesis document, the report and this section. The author chose the modification, attention pooling with a second hidden layer, the 1-head against 8-head ablation and the 2×2 control design, and approved the hypothesis before any result. The attention pool and training loop are plain PyTorch, and no outside implementation was copied.
+Claude (Anthropic), an AI coding agent, wrote `extract_tokens.py`, `attention_probe.py`, `train_hw3.py`, `hw3_contrasts.py` and the figure scripts, and it drafted the hypothesis notes, an earlier version of the report and this section. The author chose the modification (attention pooling, the 1-head against 8-head comparison and the second hidden layer) and the 2×2 control design, and wrote the report's final framing, predictions and conclusion. The attention pool and training loop are plain PyTorch, and no outside implementation was copied.
 
 ## Why React and not a plain HTML page
 
