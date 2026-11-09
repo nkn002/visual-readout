@@ -49,7 +49,7 @@ def main() -> None:
     C = json.loads((ROOT / "results/hw3/contrasts_by_box_size.json").read_text())
     x = np.array([0, 1, 2, 3, 4.35])  # gap before the all-boxes group
     w = 0.15
-    fig, ax = plt.subplots(figsize=(WIDTH, WIDTH * 0.31))
+    fig, ax = plt.subplots(figsize=(WIDTH, WIDTH * 0.245))
     ax.axvspan(-0.45, 0.45, color="#F3EBD9", lw=0, zorder=0)
     for j, (arm, label, colour) in enumerate(ARMS):
         row = C[f"{arm} vs mean, 1 hidden (HW2)"]
@@ -66,7 +66,7 @@ def main() -> None:
     ax.set_xlim(-0.5, x[-1] + 0.5)
     ax.set_ylim(-2, 7)
     ax.set_yticks([-2, 0, 2, 4, 6])
-    ax.set_ylabel("Gain over HW2 (points)")
+    ax.set_ylabel("Gain (points)")
     ax.set_xlabel("Tokens under the box")
     ax.legend(loc="upper left", bbox_to_anchor=(0.19, 1.0), ncol=2)
     out = HERE / "fig_gain_by_box_size"
