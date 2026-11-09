@@ -2,7 +2,8 @@
 """HW3 figures from results/hw3/results.json (and the saved 1-head attention model for the attention maps).
 
     python training/hw3_figures.py --tokens /scratch/rbc5xp/visual-readout
-Writes docs/hw3/{accuracy.png, curves.png, by_token_count.png, recall_delta.png, attention_maps.png}.
+Writes docs/hw3/{accuracy, curves, gain_by_box_size, recall_delta, attention_maps}.png.
+Run training/hw3_contrasts.py first: it writes the two CI files these figures read.
 """
 from __future__ import annotations
 
@@ -67,35 +68,59 @@ def curves(R: dict) -> None:
     fig.tight_layout(rect=(0, 0.13, 1, 1)); fig.savefig(OUT / "curves.png", dpi=160); plt.close(fig)
 
 
-def by_token_count(R: dict) -> None:
-    fig, ax = plt.subplots(figsize=(9, 4.5))
-    bins = list(next(iter(R["arms"].values()))["test_seeds"][0]["acc_by_token_count"])
-    for arm, r in R["arms"].items():
-        if "1 hidden" not in arm:
-            continue
-        vals = [100 * np.mean([s["acc_by_token_count"][b] for s in r["test_seeds"]]) for b in bins]
-        ax.plot(range(len(bins)), vals, marker="o", color=POOL_COLOUR[pooling_of(arm)], label=arm)
-    ax.set_xticks(range(len(bins)), [f"{b} tokens" for b in bins])
-    ax.set(ylabel="Test accuracy (%), 3-seed mean", xlabel="Tokens under the box",
-           title="Accuracy by box size (1-hidden-layer probes)")
-    ax.grid(alpha=0.3); ax.legend(fontsize=10)
-    fig.tight_layout(); fig.savefig(OUT / "by_token_count.png", dpi=160); plt.close(fig)
-
-
-def recall_delta(R: dict, arm: str) -> None:
-    base = "mean, 1 hidden (HW2)"
+def recall_delta(R: dict) -> None:
+    """Per-category recall change over HW2 with 95% CI (results/hw3/recall_delta_ci.json): your design and the best arm."""
+    D = json.loads((ROOT / "results" / "hw3" / "recall_delta_ci.json").read_text())
+    rb = 100 * np.mean([s["recall_per_class"] for s in R["arms"]["mean, 1 hidden (HW2)"]["test_seeds"]], 0)
     cls = R["classes"]
-    rb = np.mean([s["recall_per_class"] for s in R["arms"][base]["test_seeds"]], 0)
-    ra = np.mean([s["recall_per_class"] for s in R["arms"][arm]["test_seeds"]], 0)
-    d = 100 * (ra - rb)
-    order = np.argsort(d)
-    fig, ax = plt.subplots(figsize=(9, 6))
-    ax.barh(range(len(cls)), d[order], color=["#932667" if v > 0 else "#8a8a8a" for v in d[order]])
-    ax.set_yticks(range(len(cls)), [f"{cls[i]} ({100 * rb[i]:.0f}%)" for i in order])
+    show = [("attention 1 head, 2 hidden", "attention 1 head, 2 hidden (your design)", "#932667"),
+            ("attention 8 heads, 2 hidden", "attention 8 heads, 2 hidden (best arm)", "#2a78d6")]
+    order = sorted(range(len(cls)), key=lambda c: D[show[0][0]][cls[c]][0])
+    fig, ax = plt.subplots(figsize=(9, 7.5))
+    for j, (arm, lab, col) in enumerate(show):
+        for yi, c in enumerate(order):
+            m, lo, hi, _ = D[arm][cls[c]]
+            yy = yi + (j - 0.5) * 0.32
+            ax.plot([lo, hi], [yy, yy], color=col, lw=1.5)
+            ax.plot(m, yy, "o", color=col, ms=5, label=lab if yi == 0 else None)
+    ax.set_yticks(range(len(cls)), [f"{cls[c]} ({rb[c]:.0f}%)" for c in order])
     ax.axvline(0, color="#333333", lw=1)
-    ax.set(xlabel="Change in test recall, points (3-seed means)", title=f"{arm} minus HW2 mean pool, per category\n(label: HW2 recall)")
-    ax.grid(axis="x", alpha=0.3)
+    ax.set(xlabel="Change in test recall over HW2, points (3-seed mean, 95% CI)",
+           title="Recall change per category (HW2 recall in brackets)\nabout 240 test regions per category")
+    ax.grid(axis="x", alpha=0.3); ax.legend(fontsize=9, loc="upper left")
     fig.tight_layout(); fig.savefig(OUT / "recall_delta.png", dpi=160); plt.close(fig)
+
+
+GAIN_ARMS = [("mean, 2 hidden", "mean, 2 hidden (depth only)", "#8a8a8a"),
+             ("attention 1 head, 1 hidden", "attention 1 head, 1 hidden", "#d38fb8"),
+             ("attention 1 head, 2 hidden", "attention 1 head, 2 hidden (your design)", "#932667"),
+             ("attention 8 heads, 1 hidden", "attention 8 heads, 1 hidden", "#8ab8ef"),
+             ("attention 8 heads, 2 hidden", "attention 8 heads, 2 hidden", "#2a78d6")]
+
+
+def gain_by_box_size() -> None:
+    """Accuracy gain over HW2 within each box-size bin with 95% CI (results/hw3/contrasts_by_box_size.json)."""
+    C = json.loads((ROOT / "results" / "hw3" / "contrasts_by_box_size.json").read_text())
+    bins = ["1 token", "2-9", "10-49", "50+", "all"]
+    labels = ["1\n(n=843)", "2-9\n(n=1,621)", "10-49\n(n=1,606)", "50+\n(n=887)", "all\n(n=4,957)"]
+    fig, ax = plt.subplots(figsize=(10, 4.8))
+    w = 0.16
+    ax.axvspan(-0.5, 0.5, color="#f4ecd8", zorder=0)
+    for j, (arm, lab, col) in enumerate(GAIN_ARMS):
+        row = C[f"{arm} vs mean, 1 hidden (HW2)"]
+        for i, bn in enumerate(bins):
+            m, lo, hi = row[bn]
+            x = i + (j - 2) * w
+            ax.bar(x, m, w * 0.95, color=col, edgecolor="#333333", lw=0.5, label=lab if i == 0 else None, zorder=2)
+            ax.errorbar(x, m, yerr=[[m - lo], [hi - m]], color="#333333", capsize=2, lw=1, zorder=3)
+    ax.axhline(0, color="#333333", lw=1)
+    ax.text(0, -1.9, "attention\ncannot act here", ha="center", va="bottom", fontsize=9)
+    ax.set_xticks(range(len(bins)), labels)
+    ax.set(xlim=(-0.5, len(bins) - 0.5), ylim=(-2, 6.6), ylabel="Test accuracy gain over HW2 (points)",
+           xlabel="Tokens under the box (number of test regions)",
+           title="Gain over the HW2 probe by box size (3-seed mean, 95% paired-bootstrap CI)")
+    ax.grid(axis="y", alpha=0.3); ax.legend(fontsize=9, ncol=2, loc="upper left", bbox_to_anchor=(0.2, 1.0))
+    fig.tight_layout(); fig.savefig(OUT / "gain_by_box_size.png", dpi=160); plt.close(fig)
 
 
 def attention_maps(tokens_dir: Path, n_show: int = 6) -> None:
@@ -135,13 +160,15 @@ def attention_maps(tokens_dir: Path, n_show: int = 6) -> None:
         ax.imshow(im)
         for ti, wt in zip(idx["token_idx"][off[k]:off[k + 1]], w):
             rr, cc = divmod(int(ti), int(cols))
-            ax.add_patch(plt.Rectangle((cc * W / cols, rr * H / rows), W / cols, H / rows, color="#ffcc00", alpha=float(min(0.85, wt * len(w) * 0.35)), lw=0))
+            a_ = 0.85 * (wt - w.min()) / (w.max() - w.min() + 1e-12)  # lowest weight in the box clear, highest yellow
+            ax.add_patch(plt.Rectangle((cc * W / cols, rr * H / rows), W / cols, H / rows, color="#ffcc00", alpha=float(a_), lw=0))
         ax.add_patch(plt.Rectangle((x0, y0), bw, bh, fill=False, ec="#2a78d6", lw=2))
         pad = 0.25
         ax.set_xlim(max(0, x0 - pad * bw), min(W, x0 + bw * (1 + pad))); ax.set_ylim(min(H, y0 + bh * (1 + pad)), max(0, y0 - pad * bh))
         ax.set_title(f"\"{r['phrase'][:34]}\"\ntrue {classes[z['y'][k]]}, pred {pred}\nmax weight {w.max() * len(w):.1f}× uniform", fontsize=10)
         ax.axis("off")
-    fig.suptitle("Where the 1-head attention probe looks (yellow = weight; blue = the box)", fontsize=13)
+    fig.suptitle("Where the 1-head, 1-hidden attention probe (seed 0) looks, on 6 random test boxes with 12-60 tokens\n"
+                 "yellow runs from the lowest weight in the box (clear) to the highest; blue = the box", fontsize=12)
     fig.tight_layout(); fig.savefig(OUT / "attention_maps.png", dpi=150); plt.close(fig)
 
 
@@ -151,10 +178,7 @@ def main() -> None:
     a = ap.parse_args()
     R = json.loads((ROOT / "results" / "hw3" / "results.json").read_text())
     OUT.mkdir(parents=True, exist_ok=True)
-    accuracy(R); curves(R); by_token_count(R)
-    best_attn = max((x for x in R["arms"] if x.startswith("attention")), key=lambda x: R["arms"][x]["val"]["acc"])
-    if "mean, 1 hidden (HW2)" in R["arms"]:
-        recall_delta(R, best_attn)
+    accuracy(R); curves(R); gain_by_box_size(); recall_delta(R)
     if (ROOT / "results" / "hw3" / "best_attn1.pt").exists():
         attention_maps(Path(a.tokens))
     print(f"-> {OUT}")
