@@ -73,7 +73,7 @@ def recall_delta(R: dict) -> None:
     D = json.loads((ROOT / "results" / "hw3" / "recall_delta_ci.json").read_text())
     rb = 100 * np.mean([s["recall_per_class"] for s in R["arms"]["mean, 1 hidden (HW2)"]["test_seeds"]], 0)
     cls = R["classes"]
-    show = [("attention 1 head, 2 hidden", "attention 1 head, 2 hidden (your design)", "#932667"),
+    show = [("attention 1 head, 2 hidden", "attention 1 head, 2 hidden (proposed design)", "#932667"),
             ("attention 8 heads, 2 hidden", "attention 8 heads, 2 hidden (best arm)", "#2a78d6")]
     order = sorted(range(len(cls)), key=lambda c: D[show[0][0]][cls[c]][0])
     fig, ax = plt.subplots(figsize=(9, 7.5))
@@ -93,7 +93,7 @@ def recall_delta(R: dict) -> None:
 
 GAIN_ARMS = [("mean, 2 hidden", "mean, 2 hidden (depth only)", "#8a8a8a"),
              ("attention 1 head, 1 hidden", "attention 1 head, 1 hidden", "#d38fb8"),
-             ("attention 1 head, 2 hidden", "attention 1 head, 2 hidden (your design)", "#932667"),
+             ("attention 1 head, 2 hidden", "attention 1 head, 2 hidden (proposed design)", "#932667"),
              ("attention 8 heads, 1 hidden", "attention 8 heads, 1 hidden", "#8ab8ef"),
              ("attention 8 heads, 2 hidden", "attention 8 heads, 2 hidden", "#2a78d6")]
 

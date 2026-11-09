@@ -1,0 +1,100 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>HW3 experiment report</title>
+<style>
+  @page { size: letter; margin: 0.5in 0.55in; }
+  body { font-family: "Helvetica Neue", Helvetica, Arial, sans-serif; font-size: 9.2pt; line-height: 1.3; color: #111; margin: 0; }
+  h1 { font-size: 13.5pt; margin: 0 0 2px; }
+  .by { color: #444; margin-bottom: 6px; }
+  h2 { font-size: 10.5pt; margin: 9px 0 3px; border-bottom: 1px solid #bbb; padding-bottom: 1px; }
+  p { margin: 3px 0; }
+  ul, ol { margin: 2px 0 2px 18px; padding: 0; }
+  li { margin: 1px 0; }
+  table { border-collapse: collapse; width: 100%; margin: 4px 0; font-size: 8.6pt; }
+  th, td { border-bottom: 1px solid #ddd; padding: 2px 4px; text-align: left; vertical-align: top; }
+  th { border-bottom: 1.5px solid #555; }
+  td.n { text-align: right; white-space: nowrap; }
+  .tag { display: inline-block; font-size: 7.6pt; padding: 0 4px; border-radius: 3px; background: #eee; }
+  .box { background: #f4f4f4; border-left: 3px solid #932667; padding: 4px 7px; margin: 4px 0; }
+  img { display: block; margin: 4px auto; }
+  .cap { font-size: 8.2pt; color: #333; margin: 0 0 4px; }
+  .cols { display: flex; gap: 12px; }
+  .cols > div { flex: 1; }
+  code { font-size: 8.4pt; }
+</style>
+</head>
+<body>
+<h1>Attention pooling for a Qwen2.5-VL region probe: HW3 experiment report</h1>
+<div class="by">Khai-Nguyen Nguyen · DS 7400 · 2026-11-09 · code, data pipeline and results: github.com/nkn002/visual-readout (README, section HW3)</div>
+
+<h2>1. Problem and baseline</h2>
+<p><b>The probe names the content of an image region from Qwen2.5-VL-7B's hidden state 21.</b> The data are 50,000 Visual Genome regions in 20 semantic categories, 2,500 each, split by image into 39,968 / 5,075 / 4,957 train / validation / test. <b>The HW2 baseline averages the L tokens under the box</b> and classifies the 3,584-number mean with an MLP 3584 → 512 → ReLU → 20. It scores 73.62 ± 0.38% test accuracy over 3 seeds here. Its weakest category is person, at 50% recall.</p>
+
+<h2>2. Hypothesis, committed before any result</h2>
+<div class="box">
+<p><b>Design (the author's).</b> A learned query scores each token under the box, and a softmax over the box turns the scores into pooling weights. A second hidden layer follows: 3584 → 512 → ReLU → 512 → ReLU → 20. The queries start at zero, so training starts from the exact HW2 mean pool.</p>
+<p><b>Hypothesis.</b> The mean gives background tokens the same weight as object tokens. Learned weights should up-weight the object and help most where a box mixes several kinds of content, such as a person box that shows mostly a shirt.</p>
+<p><b>Predictions</b> (<code>docs/hw3/hypothesis.md</code>, commit <code>c03e240</code>, 15:02; first result 15:37):
+(1) attention changes nothing on one-token boxes; (2) gains appear for boxes of 10+ tokens and grow with size; (3) person, limb and clothing gain the most; (4) a second hidden layer on the mean adds overfitting, not accuracy; (5) 8 heads do at least as well as 1 head.</p>
+</div>
+
+<h2>3. Experimental setup</h2>
+<p><b>Six arms cross pooling with depth:</b> {mean, attention with 1 head, attention with 8 heads} × {1, 2 hidden layers}. Each of the 8 heads pools its own 448-number slice of the vector. The proposed design is "attention 1 head, 2 hidden". <b>All arms share one budget:</b> Adam over learning rate {3e-4, 1e-3} × weight decay {1e-4, 1e-3}, batch 256, dropout 0.5, early stopping on validation loss with patience 5. Each arm keeps its best setting on validation accuracy and reruns it with 3 seeds. The test set is scored only for that setting. <b>Effects are paired bootstraps</b> over test regions on seed-averaged correctness. These 95% intervals cover test sampling, not training-seed variance. <b>One-token boxes act as a placebo:</b> attention returns the token itself there, so pooling cannot cause a change on those 843 test boxes.</p>
+
+<h2>4. Observations</h2>
+<div class="cols">
+<div>
+<table>
+<tr><th>Arm</th><th class="n">Test acc</th><th class="n">Train</th><th class="n">s/ep</th><th class="n">Params</th></tr>
+<tr><td>mean, 1 hidden (HW2)</td><td class="n">73.62 ± 0.38</td><td class="n">82.4</td><td class="n">0.09</td><td class="n">1.85 M</td></tr>
+<tr><td>mean, 2 hidden</td><td class="n">74.10 ± 0.21</td><td class="n">86.4</td><td class="n">0.21</td><td class="n">2.11 M</td></tr>
+<tr><td>attn 1 head, 1 hidden</td><td class="n">74.10 ± 0.15</td><td class="n">83.7</td><td class="n">0.77</td><td class="n">2.08 M</td></tr>
+<tr><td><b>attn 1 head, 2 hidden (proposed)</b></td><td class="n">74.33 ± 0.08</td><td class="n">83.9</td><td class="n">0.69</td><td class="n">2.34 M</td></tr>
+<tr><td>attn 8 heads, 1 hidden</td><td class="n">74.48 ± 0.17</td><td class="n">88.1</td><td class="n">1.09</td><td class="n">3.68 M</td></tr>
+<tr><td>attn 8 heads, 2 hidden</td><td class="n"><b>75.07 ± 0.25</b></td><td class="n">83.1</td><td class="n">1.23</td><td class="n">3.94 M</td></tr>
+</table>
+</div>
+<div>
+<table>
+<tr><th>Contrast (points)</th><th class="n">Gap</th><th class="n">95% CI</th></tr>
+<tr><td>proposed vs HW2</td><td class="n">+0.71</td><td class="n">[+0.05, +1.32]</td></tr>
+<tr><td>depth only (mean 2 vs 1 hidden)</td><td class="n">+0.48</td><td class="n">[+0.01, +0.95]</td></tr>
+<tr><td>1-head attn vs mean, 2 hidden</td><td class="n">+0.24</td><td class="n">[−0.40, +0.80]</td></tr>
+<tr><td>8-head attn vs mean, 1 hidden</td><td class="n">+0.86</td><td class="n">[+0.26, +1.43]</td></tr>
+<tr><td>8-head attn vs mean, 2 hidden</td><td class="n">+0.97</td><td class="n">[+0.40, +1.52]</td></tr>
+<tr><td>8 vs 1 head, 2 hidden</td><td class="n">+0.73</td><td class="n">[+0.24, +1.23]</td></tr>
+<tr><td>best arm vs HW2</td><td class="n">+1.45</td><td class="n">[+0.82, +2.06]</td></tr>
+</table>
+</div>
+</div>
+<p><b>The proposed design beats HW2 by 0.71 points, and its second hidden layer carries most of that gain.</b> Depth alone adds 0.48 points. One-head attention on top of the same depth adds 0.24 points, an interval that includes zero. <b>Eight heads beat the mean pool at both depths,</b> and the best arm reaches 75.07%. Attention costs 3 to 12 times more time per epoch than the mean at the same depth, about 1.6 GB more GPU memory, and an 11.1 GB token store.</p>
+
+<img src="gain_by_box_size.png" style="width:74%">
+<p class="cap"><b>Figure 1. The 8-head arms gain as much on one-token boxes, where attention cannot act, as on larger boxes.</b> Bars show test-accuracy gain over HW2 within each box-size bin, 3-seed mean, 95% paired-bootstrap CI.</p>
+
+<h2>5. Predictions against observations</h2>
+<table>
+<tr><th style="width:27%">Prediction</th><th>Observation</th><th style="width:15%">Verdict</th></tr>
+<tr><td>1. No change on one-token boxes</td><td>1 head, 1 hidden: +0.08 [−1.23, +1.42]. 8 heads, 1 hidden, at HW2's depth: +1.30 [+0.04, +2.61], more than its +0.77 [+0.17, +1.39] on larger boxes.</td><td>Holds for 1 head; <b>contradicted for 8 heads</b></td></tr>
+<tr><td>2. Gains for 10+ tokens, growing with size</td><td>10–49 tokens: +0.25 or less, except 8 heads with 2 hidden (+1.20). 50+ tokens: attention +1.8 to +2.9, but depth alone also +1.54 [+0.41, +2.74].</td><td>Partly; not specific to attention</td></tr>
+<tr><td>3. Person, limb, clothing gain most</td><td>Person: −2.3 [−5.9, +1.2] for the proposed design, −0.3 for the best arm. Clothing: +3.2 and +6.8 in the 2-hidden attention arms. Largest steady gains: window and door, street and road, furniture.</td><td><b>Not supported for person</b>; partly for clothing</td></tr>
+<tr><td>4. Second layer adds overfitting, not accuracy</td><td>Train accuracy 86.4% against 82.4%, and test +0.48 [+0.01, +0.95].</td><td>Partly refuted</td></tr>
+<tr><td>5. 8 heads ≥ 1 head</td><td>+0.38 [−0.15, +0.89] at 1 hidden; +0.73 [+0.24, +1.23] at 2 hidden.</td><td>Supported</td></tr>
+</table>
+
+<h2>6. Failure analysis</h2>
+<table>
+<tr><th style="width:27%">Failure mode named in advance</th><th>Measurement</th><th style="width:15%">Outcome</th></tr>
+<tr><td>Attention never leaves the mean pool</td><td>Normalized entropy on test, 1 = uniform: 0.95 / 0.92 (1 head, 1 / 2 hidden), 0.93 / 0.90 (8 heads). The top token gets 2.0 to 2.9× the uniform weight. Validation entropy falls during training, e.g. 0.99 → 0.86.</td><td>Did not occur; weights stay diffuse</td></tr>
+<tr><td>Position lock on the first token</td><td>The first token is the top token in 15–18% of boxes, against 13–14% by chance.</td><td>Weak at most</td></tr>
+<tr><td>Overfitting from more parameters</td><td>Train minus validation accuracy: 9.4 points for HW2, 13.3 for 8 heads with 1 hidden, 8.1 for 8 heads with 2 hidden. Early stopping picks epochs 4 to 19.</td><td>Larger gap in one arm; held back by early stopping</td></tr>
+<tr><td>Weight decay shrinks queries; outlier tokens; fixed input scaling</td><td>Not measured. All four attention arms selected the larger weight decay, 1e-3.</td><td>Not tested</td></tr>
+</table>
+<p><b>The experiment found one failure mode that was not named in advance: the gain is not where the mechanism acts.</b> The 8-head arms gain on one-token boxes, where their input equals HW2's. Two hypotheses can explain this. First, training the shared MLP on attention-pooled vectors may change what it learns for every input. Second, seed variance, which the intervals leave out, may account for it; HW2's own seeds span 73.09% to 73.90%. The data cannot yet separate the two. <b>The attention maps</b> (README) show weights spread over most of the box, with the highest weight on object tokens in some boxes, such as ski pants over snow.</p>
+
+<h2>7. Conclusion and next test</h2>
+<p><b>The proposed design improves test accuracy by 0.71 points over HW2, mostly through its second hidden layer.</b> One-head attention adds no measurable gain, and it does not fix person recall, the failure that motivated it. Eight heads add about 1 point, but the one-token placebo shows that this gain cannot yet be attributed to re-weighting tokens. <b>The next test (not run)</b> re-scores each trained attention probe with its weights forced to uniform. That change keeps the MLP fixed and isolates the pooling. Training with more seeds would put seed variance into the intervals.</p>
+</body>
+</html>
