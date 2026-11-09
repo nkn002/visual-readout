@@ -554,7 +554,7 @@ Test accuracy (%), mean ± std over 3 seeds. Gains are in points with 95% interv
 
 **Prediction 4 holds: eight heads match or beat one head.** Eight heads gain +0.73 points over one head with 2 hidden layers [+0.24, +1.23] and +0.38 with 1 hidden layer [−0.15, +0.89]. The best probe, 8 heads with 2 hidden layers, reaches 75.07%, +1.45 over HW2 [+0.82, +2.06]. Part of this gain appears on one-token boxes, so we cannot attribute all of it to attention.
 
-**Test accuracy never falls as the parameter count grows across the six probes** (second table). This is consistent with the report's conclusion that extra capacity drives the gain. Six probes cannot separate capacity from the kind of layer that adds it.
+**Test accuracy rises with parameter count across the six probes, except for two that tie at 74.10%** (second table; 2.08 M and 2.11 M parameters). This is consistent with the report's conclusion that extra capacity drives the gain. Six probes cannot separate capacity from the kind of layer that adds it.
 
 Three more measurements support the same reading:
 
