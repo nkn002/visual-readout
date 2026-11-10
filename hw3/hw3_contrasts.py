@@ -1,9 +1,9 @@
 #!/usr/bin/env python
 """HW3: paired-bootstrap contrasts by box size and by category, from the saved per-item test correctness.
 
-    python training/hw3_contrasts.py --tokens /scratch/rbc5xp/visual-readout
-Reads results/hw3/arm_<i>_correct.npz (3 seeds x 4,957 test regions) and writes
-results/hw3/contrasts_by_box_size.json and results/hw3/recall_delta_ci.json.
+    python hw3/hw3_contrasts.py --tokens /scratch/rbc5xp/visual-readout
+Reads hw3/results/arm_<i>_correct.npz (3 seeds x 4,957 test regions) and writes
+hw3/results/contrasts_by_box_size.json and hw3/results/recall_delta_ci.json.
 
 Each item's correctness is averaged over the 3 seeds first, so the CI covers test-set sampling only,
 not training-seed variance.
@@ -17,7 +17,7 @@ from pathlib import Path
 import numpy as np
 
 ROOT = Path(__file__).resolve().parents[1]
-RES = ROOT / "results" / "hw3"
+RES = ROOT / "hw3" / "results"
 BASE = "mean, 1 hidden (HW2)"
 PAIRS = [("attention 1 head, 1 hidden", BASE), ("attention 8 heads, 1 hidden", BASE),
          ("attention 8 heads, 2 hidden", "mean, 2 hidden"), ("mean, 2 hidden", BASE),

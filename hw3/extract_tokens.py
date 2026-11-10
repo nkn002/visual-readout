@@ -11,7 +11,7 @@ Outputs (large, so under /scratch by default; never committed):
   index.npz     offsets [N+1] into tokens.npy, token_idx (flat grid index of each token), grid [N, 2] rows/cols,
                 cos_to_stored [N] = cosine(mean of the extracted tokens, the stored HW2 vector) as a sanity check
 
-    /home/rbc5xp/.conda/envs/nnedit/bin/python training/extract_tokens.py --out /scratch/rbc5xp/visual-readout
+    /home/rbc5xp/.conda/envs/nnedit/bin/python hw3/extract_tokens.py --out /scratch/rbc5xp/visual-readout
 """
 from __future__ import annotations
 

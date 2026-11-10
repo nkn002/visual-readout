@@ -9,10 +9,10 @@ Budget per arm: Adam, lr {3e-4, 1e-3} x weight decay {1e-4, 1e-3}, dropout 0.5, 
 early stopping on validation loss (patience 5). Each arm keeps the setting with the best validation accuracy,
 which then reruns with seeds 1 and 2. The test set is scored for the selected setting only.
 
-    python training/train_hw3.py --tokens /scratch/rbc5xp/visual-readout      # full run (GPU)
-    python training/train_hw3.py --synthetic                                  # tiny fake data, checks the code
+    python hw3/train_hw3.py --tokens /scratch/rbc5xp/visual-readout      # full run (GPU)
+    python hw3/train_hw3.py --synthetic                                       # tiny fake data, checks the code
 
-Outputs: results/hw3/results.json, results/hw3/*.png, results/hw3/best_attn1.pt
+Outputs: hw3/results/results.json, one arm_<i>.json per arm, hw3/results/best_attn1.pt
 """
 from __future__ import annotations
 
@@ -234,7 +234,7 @@ def main() -> None:
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("--tokens", default="/scratch/rbc5xp/visual-readout")
     ap.add_argument("--synthetic", action="store_true")
-    ap.add_argument("--out", default=str(ROOT / "results" / "hw3"))
+    ap.add_argument("--out", default=str(ROOT / "hw3" / "results"))
     ap.add_argument("--arms", default="all", help="comma-separated arm indices (0-5) or 'all'")
     ap.add_argument("--merge", action="store_true", help="only rebuild results.json from the saved arms")
     a = ap.parse_args()
