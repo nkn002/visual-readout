@@ -109,6 +109,8 @@ Three more measurements support the same reading:
 - **The results do not show that attention helps by focusing on the relevant tokens.** One head adds +0.24 points at the same depth, and eight heads gain on boxes where attention has nothing to re-weight.
 - **The results suggest that the gain is an effect of extra capacity,** consistent with scaling laws for neural networks (Kaplan et al., 2020). This is an interpretation, not a tested claim.
 
+**Next steps.** Extra capacity is one explanation of the gain, as training the MLP on attention-pooled vectors changes what the MLP learns. To verify this hypothesis, we would run two tests next: (1) re-score each trained attention probe with uniform attention weights, to separate the pooling from the MLP; and (2) widen the mean-pool MLP, to test capacity without attention.
+
 ## Use of AI
 
 Claude (Anthropic), an AI coding agent, wrote `extract_tokens.py`, `attention_probe.py`, `train_hw3.py` and `hw3_contrasts.py`, made the figures, and drafted an earlier version of the report and this page. The author chose the modification (attention pooling, the 1-head against 8-head comparison and the second hidden layer) and the 2×2 control design, and wrote the report's final framing, predictions and conclusion. The author also reviewed the code and checked the results against the saved outputs. The attention pool and training loop are plain PyTorch, and no outside implementation was copied.
