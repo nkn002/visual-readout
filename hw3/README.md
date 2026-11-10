@@ -1,6 +1,6 @@
 # HW3: attention pooling for the region probe
 
-DS7400 Deep Learning, Homework 3 · Khai-Nguyen Nguyen · part of [visual-readout](../README.md)
+DS7400 Deep Learning, Homework 3 · Khai-Nguyen Nguyen · part of [visual-readout](../README.md); Homeworks 1 and 2 are in [README_HW1HW2.md](../README_HW1HW2.md)
 
 The experiment report is [report.pdf](report.pdf). This page follows the report.
 
@@ -20,7 +20,7 @@ The experiment report is [report.pdf](report.pdf). This page follows the report.
 
 **The probe reads a frozen VLM's internal activations, not pixels.** Qwen2.5-VL-7B-Instruct encodes the image and the prompt. The probe takes the layer-20 activations at the image tokens under a Visual Genome bounding box and classifies the region into one of 20 object categories. In code, layer 20's output is `hidden_states[21]`.
 
-**HW3 uses the HW2 data.** The data are 50,000 regions, 2,500 per category, split by image into 39,968 train, 5,075 validation and 4,957 test regions (see the HW2 section of the [main README](../README.md)).
+**HW3 uses the HW2 data.** The data are 50,000 regions, 2,500 per category, split by image into 39,968 train, 5,075 validation and 4,957 test regions (see the HW2 section of [README_HW1HW2.md](../README_HW1HW2.md)).
 
 **HW3 needs every token under each box, not their mean.** `extract_tokens.py` re-runs Qwen2.5-VL and stores 1,549,854 tokens (11.1 GB, under `/scratch`, outside git). Each region's token mean matches its stored HW2 vector at median cosine 0.9999. A box covers 1 to 1,672 tokens, with a median of 9, and 18.5% of regions cover a single token.
 
@@ -107,10 +107,7 @@ Three more measurements support the same reading:
 
 - **Adding capacity to the HW2 probe improves test accuracy.** A second hidden layer and eight attention heads both contribute, and the best probe gains +1.45 points.
 - **The results do not show that attention helps by focusing on the relevant tokens.** One head adds +0.24 points at the same depth, and eight heads gain on boxes where attention has nothing to re-weight.
-- **The report reads the gain as an effect of extra capacity,** consistent with scaling laws for neural networks (Kaplan et al., 2020). This is an interpretation, not a tested claim.
-- **Two controls shaped the conclusion:** the mean pool with 2 hidden layers and the one-token boxes. Without them, the gain would read as an attention effect.
-
-The app's **Predict** button still serves the HW2 probe. Serving an attention probe would need the model server to return every token under the box.
+- **The results suggest that the gain is an effect of extra capacity,** consistent with scaling laws for neural networks (Kaplan et al., 2020). This is an interpretation, not a tested claim.
 
 ## Use of AI
 
